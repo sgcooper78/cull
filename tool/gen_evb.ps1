@@ -18,13 +18,26 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Resolve to an absolute path. Joining an already-rooted path onto the CWD
+# yields `C:\wd\C:\abs\...`, which [Path]::GetFullPath then rejects with
+# "The given path's format is not supported" — build_portable.ps1 always
+# passes absolute -OutputExe / -EvbPath.
+function Resolve-FullPath([string]$path) {
+  if (-not [System.IO.Path]::IsPathRooted($path)) {
+    $path = Join-Path (Get-Location).Path $path
+  }
+  [System.IO.Path]::GetFullPath($path)
+}
+
 $ReleaseDir = (Resolve-Path $ReleaseDir).Path
 $inputFull  = Join-Path $ReleaseDir $InputExeName
 if (-not (Test-Path $inputFull)) { throw "Input exe not found: $inputFull" }
 
-$OutputExe = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputExe))
+$OutputExe = Resolve-FullPath $OutputExe
+$EvbPath   = Resolve-FullPath $EvbPath
 New-Item -ItemType Directory -Force -Path (Split-Path $OutputExe) | Out-Null
-New-Item -ItemType Directory -Force -Path (Split-Path ([System.IO.Path]::GetFullPath((Join-Path (Get-Location) $EvbPath)))) | Out-Null
+New-Item -ItemType Directory -Force -Path (Split-Path $EvbPath) | Out-Null
 
 $sb = [System.Text.StringBuilder]::new()
 function W($s) { [void]$sb.AppendLine($s) }
@@ -75,5 +88,5 @@ W "`t</Files>"
 W '</>'
 
 $enc = [System.Text.Encoding]::GetEncoding('windows-1251')
-[System.IO.File]::WriteAllText([System.IO.Path]::GetFullPath((Join-Path (Get-Location) $EvbPath)), $sb.ToString(), $enc)
+[System.IO.File]::WriteAllText($EvbPath, $sb.ToString(), $enc)
 Write-Host "wrote $EvbPath  (input: $inputFull  ->  output: $OutputExe)"

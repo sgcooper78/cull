@@ -20,12 +20,9 @@ jobs:
         include:
           - os: windows-latest
             target: windows
-          - os: macos-14        # Apple Silicon
-            target: macos
+          - os: macos-14        # Apple Silicon (arm64 only — Intel runners
+            target: macos       # queue for ages and are being retired)
             arch: arm64
-          - os: macos-13        # Intel
-            target: macos
-            arch: x64
           - os: ubuntu-latest
             target: linux
     runs-on: ${{ matrix.os }}
@@ -147,6 +144,5 @@ jobs:
             | Platform | File | Run it |
             |----------|------|--------|
             | Windows | `Cull-*-portable.exe` | Double-click. SmartScreen: **More info → Run anyway**. |
-            | macOS (Apple Silicon) | `Cull-*-macos-arm64.dmg` | Open, drag to Applications. First launch: **right-click → Open**, or `xattr -dr com.apple.quarantine /Applications/Cull.app`. |
-            | macOS (Intel) | `Cull-*-macos-x64.dmg` | Same as above. |
+            | macOS (Apple Silicon) | `Cull-*-macos-arm64.dmg` | Open, drag to Applications. First launch: **right-click → Open**, or `xattr -dr com.apple.quarantine /Applications/Cull.app`. Intel Macs: build from source. |
             | Linux | `Cull-*-linux-x64.AppImage` | `chmod +x` then run. Needs `libfuse2` (`sudo apt install libfuse2`) or run with `--appimage-extract-and-run`. |

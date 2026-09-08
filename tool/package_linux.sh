@@ -54,8 +54,10 @@ fi
 
 tool_ai="build/appimagetool-x86_64.AppImage"
 if [ ! -x "$tool_ai" ]; then
-  curl -fsSL -o "$tool_ai" \
-    https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+  # appimagetool moved out of the archived AppImageKit repo; the old
+  # /releases/download/13/ asset now 404s.
+  curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o "$tool_ai" \
+    https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
   chmod +x "$tool_ai"
 fi
 
