@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          - os: macos-14        # Apple Silicon
+            target: macos
+            arch: arm64
+          - os: macos-13        # Intel
+            target: macos
+            arch: x64
+          - os: ubuntu-latest
+            target: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+
+      - run: flutter --version
+
+      - name: Linux build deps
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev libmpv-dev mpv imagemagick
+
+      - run: flutter pub get
+
+      - run: dart run build_runner build
+
+      - name: Analyze & test
+        if: matrix.target == 'linux'
+        run: |
+          flutter analyze
+          flutter test
+
+      - name: Package — Windows
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          choco install enigmavirtualbox -y --no-progress
+          powershell -NoProfile -ExecutionPolicy Bypass -File tool\build_portable.ps1
+
+      - name: Package — macOS
+        if: matrix.target == 'macos'
+        run: bash tool/package_macos.sh ${{ matrix.arch }}
+
+      - name: Package — Linux
+        if: matrix.target == 'linux'
+        run: bash tool/package_linux.sh
+
+      - name: List artifacts
+        shell: bash
+        run: ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cull-${{ matrix.target }}-${{ matrix.arch || 'x64' }}
+          if-no-files-found: error
+          path: |
+            dist/Cull-*-portable.exe
+            dist/Cull-*.dmg
+            dist/Cull-*.AppImage
+
+  release:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - run: ls -la artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: artifacts/Cull-*
+          body: |
+            Portable builds of **Cull** — one file per platform. All **unsigned**.
+
+            | Platform | File | Run it |
+            |----------|------|--------|
+            | Windows | `Cull-*-portable.exe` | Double-click. SmartScreen: **More info → Run anyway**. |
+            | macOS (Apple Silicon) | `Cull-*-macos-arm64.dmg` | Open, drag to Applications. First launch: **right-click → Open**, or `xattr -dr com.apple.quarantine /Applications/Cull.app`. |
+            | macOS (Intel) | `Cull-*-macos-x64.dmg` | Same as above. |
+            | Linux | `Cull-*-linux-x64.AppImage` | `chmod +x` then run. Needs `libfuse2` (`sudo apt install libfuse2`) or run with `--appimage-extract-and-run`. |
