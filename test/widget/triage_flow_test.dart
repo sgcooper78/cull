@@ -11,18 +11,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_file_source.dart';
 import '../support/in_memory_mark_store.dart';
+import '../support/paths.dart';
 
 void main() {
   late FakeFileSource fs;
 
   setUp(() {
     fs = FakeFileSource()
-      ..addDir(r'C:\root')
-      ..addDir(r'C:\root\sub')
-      ..addFile(r'C:\root\sub\z.txt')
-      ..addFile(r'C:\root\a.txt')
-      ..addFile(r'C:\root\b.txt')
-      ..addFile(r'C:\root\c.txt');
+      ..addDir(tp('root'))
+      ..addDir(tp('root/sub'))
+      ..addFile(tp('root/sub/z.txt'))
+      ..addFile(tp('root/a.txt'))
+      ..addFile(tp('root/b.txt'))
+      ..addFile(tp('root/c.txt'));
   });
 
   Future<(ProviderContainer, WidgetRef)> harness(WidgetTester tester) async {
@@ -37,7 +38,7 @@ void main() {
     );
     addTearDown(container.dispose);
     await container.read(marksControllerProvider.future);
-    container.read(browseProvider.notifier).openRoot(r'C:\root');
+    container.read(browseProvider.notifier).openRoot(tp('root'));
 
     late WidgetRef ref;
     await tester.pumpWidget(
@@ -77,7 +78,7 @@ void main() {
     await tester.pump();
 
     final marks = container.read(marksControllerProvider.notifier);
-    expect(marks.markFor(r'C:\root\a.txt'), Mark.delete);
+    expect(marks.markFor(tp('root/a.txt')), Mark.delete);
     expect(container.read(selectionProvider)?.name, 'b.txt');
   });
 
@@ -85,14 +86,14 @@ void main() {
     tester,
   ) async {
     final (container, ref) = await harness(tester);
-    container.read(treeExpansionProvider.notifier).expand(r'C:\root\sub');
+    container.read(treeExpansionProvider.notifier).expand(tp('root/sub'));
     await tester.pump();
     await tester.pump();
 
     // sub's z.txt sorts before a.txt in the flattened tree (folder first).
     expect(advanceSelection(ref), isTrue);
     await tester.pump();
-    expect(container.read(selectionProvider)?.path, r'C:\root\sub\z.txt');
+    expect(container.read(selectionProvider)?.path, tp('root/sub/z.txt'));
   });
 
   testWidgets('advance past the last visible file does nothing', (
@@ -102,7 +103,7 @@ void main() {
     container
         .read(selectionProvider.notifier)
         .select(
-          (await fs.list(r'C:\root')).firstWhere((e) => e.name == 'c.txt'),
+          (await fs.list(tp('root'))).firstWhere((e) => e.name == 'c.txt'),
         );
 
     expect(advanceSelection(ref), isFalse);

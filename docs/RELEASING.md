@@ -65,8 +65,12 @@ bash tool/package_linux.sh                      # Linux    -> dist/
 single exe (no folder, no zip). Install it once:
 
 ```
-choco install enigmavirtualbox     # or https://enigmaprotector.com
+# vendor installer (the Chocolatey package is currently broken — stale checksum):
+#   https://enigmaprotector.com/assets/files/enigmavb.exe  ->  /VERYSILENT install
+choco install enigmavirtualbox     # try this first; falls back to the URL above
 ```
+
+CI (`release.yml`) installs it from the vendor URL directly for the same reason.
 
 Then the script does everything — `tool\gen_evb.ps1` generates the `.evb`
 project from the real build output (no drift, no GUI step).

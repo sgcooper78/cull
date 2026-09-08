@@ -10,17 +10,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_file_source.dart';
 import '../support/in_memory_mark_store.dart';
+import '../support/paths.dart';
 
 void main() {
   late FakeFileSource fs;
 
   setUp(() {
     fs = FakeFileSource()
-      ..addDir(r'C:\root')
-      ..addDir(r'C:\root\sub')
-      ..addFile(r'C:\root\sub\c.txt')
-      ..addFile(r'C:\root\a.txt')
-      ..addFile(r'C:\root\b.txt');
+      ..addDir(tp('root'))
+      ..addDir(tp('root/sub'))
+      ..addFile(tp('root/sub/c.txt'))
+      ..addFile(tp('root/a.txt'))
+      ..addFile(tp('root/b.txt'));
   });
 
   Future<ProviderContainer> pumpPanel(WidgetTester tester) async {
@@ -36,7 +37,7 @@ void main() {
     );
     addTearDown(container.dispose);
     await container.read(marksControllerProvider.future);
-    container.read(browseProvider.notifier).openRoot(r'C:\root');
+    container.read(browseProvider.notifier).openRoot(tp('root'));
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -81,8 +82,8 @@ void main() {
     await tester.pump();
 
     final ctrl = container.read(marksControllerProvider.notifier);
-    expect(ctrl.markFor(r'C:\root\a.txt'), Mark.delete);
-    expect(ctrl.markFor(r'C:\root\b.txt'), Mark.safe);
+    expect(ctrl.markFor(tp('root/a.txt')), Mark.delete);
+    expect(ctrl.markFor(tp('root/b.txt')), Mark.safe);
   });
 
   testWidgets('toggling a folder marks it and everything inside', (
@@ -97,7 +98,7 @@ void main() {
     await tester.pump();
 
     final ctrl = container.read(marksControllerProvider.notifier);
-    expect(ctrl.deletePaths..sort(), [r'C:\root\sub', r'C:\root\sub\c.txt']);
+    expect(ctrl.deletePaths..sort(), [tp('root/sub'), tp('root/sub/c.txt')]);
   });
 
   testWidgets('"All delete" marks the whole tree', (tester) async {
@@ -109,10 +110,10 @@ void main() {
 
     final ctrl = container.read(marksControllerProvider.notifier);
     expect(ctrl.deletePaths..sort(), [
-      r'C:\root\a.txt',
-      r'C:\root\b.txt',
-      r'C:\root\sub',
-      r'C:\root\sub\c.txt',
+      tp('root/a.txt'),
+      tp('root/b.txt'),
+      tp('root/sub'),
+      tp('root/sub/c.txt'),
     ]);
   });
 }

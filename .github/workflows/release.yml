@@ -56,12 +56,52 @@ jobs:
           flutter analyze
           flutter test
 
-      - name: Package — Windows
+      # The Chocolatey `enigmavirtualbox` package is broken (upstream moved the
+      # download; its pinned checksum no longer matches). Install straight from
+      # the vendor instead — same binary, no stale hash gate.
+      - name: Install Enigma Virtual Box
         if: matrix.target == 'windows'
         shell: pwsh
         run: |
-          choco install enigmavirtualbox -y --no-progress
-          powershell -NoProfile -ExecutionPolicy Bypass -File tool\build_portable.ps1
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://enigmaprotector.com/assets/files/enigmavb.exe'
+          $installer = Join-Path $env:RUNNER_TEMP 'enigmavb.exe'
+          $ok = $false
+          for ($i = 1; $i -le 4 -and -not $ok; $i++) {
+            try {
+              Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing -TimeoutSec 180
+              $ok = $true
+            } catch {
+              Write-Host "Download attempt $i failed: $($_.Exception.Message)"
+              Start-Sleep -Seconds 15
+            }
+          }
+          if (-not $ok) { throw "Could not download Enigma Virtual Box installer" }
+          # Inno Setup installer.
+          Start-Process -FilePath $installer `
+            -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          $dirs = @(
+            (Join-Path ${env:ProgramFiles(x86)} 'Enigma Virtual Box'),
+            (Join-Path $env:ProgramFiles 'Enigma Virtual Box')
+          )
+          $console = $null
+          for ($i = 0; $i -lt 30 -and -not $console; $i++) {
+            $console = $dirs |
+              ForEach-Object { Join-Path $_ 'enigmavbconsole.exe' } |
+              Where-Object { Test-Path $_ } | Select-Object -First 1
+            if (-not $console) { Start-Sleep 2 }
+          }
+          if (-not $console) {
+            throw "Enigma Virtual Box install produced no enigmavbconsole.exe in $($dirs -join ', ')"
+          }
+          Write-Host "Installed: $console"
+          # build_portable.ps1 also probes a bare `enigmavbconsole.exe` on PATH.
+          Add-Content $env:GITHUB_PATH (Split-Path $console)
+
+      - name: Package — Windows
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tool\build_portable.ps1
 
       - name: Package — macOS
         if: matrix.target == 'macos'

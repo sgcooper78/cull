@@ -2,6 +2,8 @@ import 'package:cull/data/fs/file_source.dart';
 import 'package:cull/data/fs/fs_entry.dart';
 import 'package:path/path.dart' as p;
 
+import 'paths.dart';
+
 /// In-memory [FileSource] for tests. Build a tree with [addDir]/[addFile]
 /// using native-style paths for the host (on Windows, `C:\root\sub\a.mp4`).
 class FakeFileSource implements FileSource {
@@ -37,7 +39,7 @@ class FakeFileSource implements FileSource {
   }
 
   @override
-  String? get homePath => p.join('C:', 'home');
+  String? get homePath => tp('home');
 
   @override
   Future<List<FsEntry>> list(String dirPath) async {

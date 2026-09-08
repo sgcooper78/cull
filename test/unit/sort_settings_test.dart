@@ -2,9 +2,11 @@ import 'package:cull/data/fs/fs_entry.dart';
 import 'package:cull/data/settings/sort_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/paths.dart';
+
 FsEntry _e(String name, {bool dir = false, int size = 0, DateTime? modified}) =>
     FsEntry(
-      path: 'C:\\root\\$name',
+      path: tp('root/$name'),
       isDirectory: dir,
       size: size,
       modified: modified ?? DateTime(2026),
