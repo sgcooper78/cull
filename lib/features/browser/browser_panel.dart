@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/formatting.dart';
 import '../../data/marks/mark.dart';
 import '../../data/marks/marks_controller.dart';
+import '../triage/delete_marked.dart';
+import '../triage/deletion_stats.dart';
 import 'browse_controller.dart';
 import 'tree_controller.dart';
 import 'widgets/sort_menu.dart';
@@ -34,6 +37,7 @@ class BrowserPanel extends ConsumerWidget {
       children: [
         _RootBar(root: root),
         _BulkBar(root: root),
+        const _MarkedSummary(),
         const Divider(height: 1),
         Expanded(
           child: rows.isEmpty
@@ -89,6 +93,55 @@ class _RootBar extends ConsumerWidget {
                 ref.read(treeExpansionProvider.notifier).collapseAll(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Live "what a delete would remove" line. Hidden when nothing is marked;
+/// tapping it opens the confirm dialog.
+class _MarkedSummary extends ConsumerWidget {
+  const _MarkedSummary();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats =
+        ref.watch(deletionStatsControllerProvider).asData?.value ??
+        DeletionStats.empty;
+    if (stats.isEmpty) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    final parts = <String>[
+      if (stats.fileCount > 0)
+        '${stats.fileCount} file${stats.fileCount == 1 ? '' : 's'}',
+      if (stats.folderCount > 0)
+        '${stats.folderCount} folder${stats.folderCount == 1 ? '' : 's'}',
+      if (stats.archiveEntryCount > 0) '${stats.archiveEntryCount} in archives',
+    ];
+    final freed = stats.bytes > 0
+        ? ' · ${formatBytes(stats.bytes)} to free'
+        : '';
+
+    return Material(
+      color: scheme.errorContainer.withValues(alpha: 0.45),
+      child: InkWell(
+        onTap: () => runDeleteMarked(context, ref),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            children: [
+              Icon(Icons.delete_sweep, size: 16, color: scheme.error),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${parts.join(' · ')} marked$freed',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

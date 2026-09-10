@@ -8,6 +8,7 @@ class InMemorySettingsStore implements SettingsStore {
 
   ScrubSettings? scrub;
   SortSettings? sort;
+  Map<String, String> resume = {};
 
   @override
   Future<ScrubSettings?> loadScrub() async => scrub;
@@ -20,4 +21,11 @@ class InMemorySettingsStore implements SettingsStore {
 
   @override
   Future<void> saveSort(SortSettings settings) async => sort = settings;
+
+  @override
+  Future<Map<String, String>> loadResume() async => Map.of(resume);
+
+  @override
+  Future<void> saveResume(Map<String, String> lastFileByRoot) async =>
+      resume = Map.of(lastFileByRoot);
 }

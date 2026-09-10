@@ -85,7 +85,21 @@ would otherwise swallow the keys.
 `settings.json` in the app-support dir via `SettingsStore` (same interface
 pattern as `MarkStore`); changes apply live to playing media.
 
-`flutter analyze` clean, **111 tests green**, `flutter build windows --debug`
+**Resume.** Delete marks persist by absolute path in `marks.json` (absent =
+safe — only delete is written). On top of that, `SettingsStore` has a `"resume"`
+key (`{root: lastFilePath}`); `features/browser/resume.dart` `rememberResume`
+records the viewed file per root as you move, and `restoreResume` (fired from
+`home_shell`'s `ref.listen(browseProvider)`) expands the tree down to that file
+and selects it when the directory is reopened. Archive-member selections and
+missing files are skipped.
+
+**Space to free.** `deletionStatsControllerProvider`
+(`features/triage/deletion_stats.dart`) tallies marked files/folders + summed
+file bytes (one cached `stat` per path; archive-member marks counted but not
+sized). `BrowserPanel`'s `_MarkedSummary` shows it live as a tappable red bar
+above the tree; the confirm dialog shows "Frees about X".
+
+`flutter analyze` clean, **118 tests green**, `flutter build windows --debug`
 produces `cull.exe`, which launches and runs. `macos/` + `linux/` folders
 generated (macOS App Sandbox **disabled** — see `macos/Runner/*.entitlements`);
 neither built/tested on this Windows machine.
@@ -155,7 +169,7 @@ lib/
     fs/           FileSource interface + dart:io backend, directory walking, delete ops
     thumbs/       thumbnail generation + LRU cache
     marks/        Mark, MarkStore interface (JSON sidecar), MarksController
-    settings/     ScrubSettings, SortSettings, SettingsStore + settingsStoreProvider (settings.json)
+    settings/     ScrubSettings, SortSettings, SettingsStore (settings.json: scrub / sort / resume keys)
   features/
     browser/      pick + navigate directories, file list/grid
     viewer/       preview: image / video / audio / archive / text / unknown fallback

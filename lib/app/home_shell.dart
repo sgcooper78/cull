@@ -8,6 +8,7 @@ import '../data/marks/mark.dart';
 import '../data/marks/marks_controller.dart';
 import '../features/browser/browse_controller.dart';
 import '../features/browser/browser_panel.dart';
+import '../features/browser/resume.dart';
 import '../features/triage/delete_marked.dart';
 import '../features/triage/triage_actions.dart';
 import '../features/viewer/scrub_mode_controller.dart';
@@ -44,6 +45,18 @@ class HomeShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final hasRoot = ref.watch(browseProvider) != null;
     final scrubOn = ref.watch(scrubModeProvider);
+
+    // Resume: jump back to the last file when a directory is (re)opened, and
+    // record the current file as we move through it.
+    ref.listen(browseProvider, (prev, next) {
+      if (next != null && next != prev) restoreResume(ref, next);
+    });
+    ref.listen(selectionProvider, (prev, next) {
+      final root = ref.read(browseProvider);
+      if (root != null && next != null && !next.isDirectory) {
+        rememberResume(ref, root, next.path);
+      }
+    });
 
     return CallbackShortcuts(
       bindings: {

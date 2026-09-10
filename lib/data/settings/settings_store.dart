@@ -23,6 +23,11 @@ abstract interface class SettingsStore {
   Future<SortSettings?> loadSort();
   Future<void> saveSort(SortSettings settings);
 
+  /// Last file viewed in each root directory (`{root: filePath}`), so
+  /// reopening a directory can jump straight back to where triage left off.
+  Future<Map<String, String>> loadResume();
+  Future<void> saveResume(Map<String, String> lastFileByRoot);
+
   static Future<SettingsStore> open() async {
     final dir = await getApplicationSupportDirectory();
     return JsonFileSettingsStore(File(p.join(dir.path, 'settings.json')));
@@ -74,4 +79,18 @@ class JsonFileSettingsStore implements SettingsStore {
   @override
   Future<void> saveSort(SortSettings settings) =>
       _writeKey('sort', settings.toJson());
+
+  @override
+  Future<Map<String, String>> loadResume() async {
+    final resume = (await _readAll())['resume'];
+    if (resume is! Map) return {};
+    return {
+      for (final e in resume.entries)
+        if (e.value is String) '${e.key}': e.value as String,
+    };
+  }
+
+  @override
+  Future<void> saveResume(Map<String, String> lastFileByRoot) =>
+      _writeKey('resume', lastFileByRoot);
 }

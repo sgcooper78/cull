@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/formatting.dart';
 import '../../data/archives/archive_entry.dart';
 import '../../data/marks/marks_controller.dart';
+import 'deletion_stats.dart';
 
 /// Show the confirm dialog for committing deletions, run it, and report the
 /// outcome. No-op (with a SnackBar) when nothing is marked.
@@ -24,6 +26,9 @@ Future<void> runDeleteMarked(BuildContext context, WidgetRef ref) async {
       .toSet()
       .length;
 
+  final stats = await ref.read(deletionStatsControllerProvider.future);
+  if (!context.mounted) return;
+
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -41,6 +46,16 @@ Future<void> runDeleteMarked(BuildContext context, WidgetRef ref) async {
               'This permanently removes them from disk. Folders are '
               'deleted with everything inside them.',
             ),
+            if (stats.bytes > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Frees about ${formatBytes(stats.bytes)}'
+                '${stats.archiveEntryCount > 0 ? ' (plus entries inside '
+                          'archives)' : ''}.',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
             if (archiveCount > 0) ...[
               const SizedBox(height: 8),
               Text(
