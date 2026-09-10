@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 import 'package:path/path.dart' as p;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../archives/archive_entry.dart';
+import '../archives/archive_providers.dart';
 import '../fs/file_source.dart';
 import '../fs/fs_entry.dart';
 import '../fs/fs_providers.dart';
@@ -70,6 +72,9 @@ class MarksController extends _$MarksController {
     Mark mark, {
     bool includeRoot = false,
   }) async {
+    if (isArchiveMemberPath(dirPath)) {
+      return _markArchiveSubtree(dirPath, mark, includeRoot: includeRoot);
+    }
     final fs = ref.read(fileSourceProvider);
     final paths = includeRoot ? <String>[dirPath] : <String>[];
     final stack = <String>[dirPath];
@@ -86,6 +91,37 @@ class MarksController extends _$MarksController {
         if (e.isDirectory) stack.add(e.path);
       }
     }
+    final next = Map<String, Mark>.from(_current);
+    for (final path in paths) {
+      if (mark == Mark.safe) {
+        next.remove(path);
+      } else {
+        next[path] = mark;
+      }
+    }
+    await _commit(next);
+  }
+
+  /// Marks every entry under an archive-member directory (a `!/` path). The
+  /// listing comes from the archive itself, not the filesystem.
+  Future<void> _markArchiveSubtree(
+    String containerPath,
+    Mark mark, {
+    required bool includeRoot,
+  }) async {
+    final root = rootArchiveOf(containerPath);
+    final (_, prefix) = splitArchivePath(containerPath);
+    final result = await ref.read(archiveReaderProvider).list(root);
+    final entries = result.valueOrNull ?? const <ArchiveEntry>[];
+
+    final paths = <String>[if (includeRoot) containerPath];
+    for (final e in entries) {
+      if (e.path == prefix) continue;
+      if (e.path.startsWith('$prefix/')) {
+        paths.add(joinArchivePath(root, e.path));
+      }
+    }
+
     final next = Map<String, Mark>.from(_current);
     for (final path in paths) {
       if (mark == Mark.safe) {

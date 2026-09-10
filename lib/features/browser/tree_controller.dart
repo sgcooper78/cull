@@ -1,12 +1,15 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../data/fs/fs_entry.dart';
+import 'archive_tree.dart';
 import 'browse_controller.dart';
 import 'sort_controller.dart';
 
 part 'tree_controller.g.dart';
 
-/// Absolute paths of the directories currently expanded in the tree.
+/// Absolute paths of the directories currently expanded in the tree. Also holds
+/// expanded archive files and archive-member directories, whose paths carry the
+/// `!/` separator.
 @Riverpod(keepAlive: true)
 class TreeExpansion extends _$TreeExpansion {
   @override
@@ -50,6 +53,11 @@ class ErrorRow extends TreeRow {
 
 /// The visible tree, flattened depth-first for a `ListView.builder`. Rebuilds
 /// when the root, the expansion set, or any expanded folder's listing changes.
+///
+/// An expanded archive file (or a folder inside one) draws its children from
+/// [archiveChildrenProvider] instead of [directoryListingProvider]; everything
+/// downstream keeps working because the children are [FsEntry]s with `!/`
+/// paths.
 @riverpod
 List<TreeRow> treeRows(Ref ref) {
   final root = ref.watch(browseProvider);
@@ -59,15 +67,21 @@ List<TreeRow> treeRows(Ref ref) {
 
   final rows = <TreeRow>[];
 
-  void addChildren(String dirPath, int depth) {
-    final listing = ref.watch(directoryListingProvider(dirPath));
+  void addChildren(String container, int depth, {required bool archived}) {
+    final listing = archived
+        ? ref.watch(archiveChildrenProvider(container))
+        : ref.watch(directoryListingProvider(container));
     switch (listing) {
       case AsyncData(:final value):
         final entries = [...value]..sort(sort.compare);
         for (final entry in entries) {
-          final isOpen = entry.isDirectory && expanded.contains(entry.path);
+          final entering = !archived && isBrowsableArchive(entry);
+          final canExpand = entry.isDirectory || entering;
+          final isOpen = canExpand && expanded.contains(entry.path);
           rows.add(EntryRow(depth, entry, expanded: isOpen));
-          if (isOpen) addChildren(entry.path, depth + 1);
+          if (isOpen) {
+            addChildren(entry.path, depth + 1, archived: archived || entering);
+          }
         }
       case AsyncError(:final error):
         rows.add(ErrorRow(depth, '$error'));
@@ -76,6 +90,6 @@ List<TreeRow> treeRows(Ref ref) {
     }
   }
 
-  addChildren(root, 0);
+  addChildren(root, 0, archived: false);
   return rows;
 }

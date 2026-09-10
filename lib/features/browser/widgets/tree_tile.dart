@@ -5,13 +5,15 @@ import '../../../core/formatting.dart';
 import '../../../data/marks/mark.dart';
 import '../../../data/marks/marks_controller.dart';
 import '../../viewer/selection_controller.dart';
+import '../archive_tree.dart';
 import '../tree_controller.dart';
 import 'entry_icon.dart';
 import 'mark_button.dart';
 
-/// One row of the directory tree. Tapping a folder expands/collapses it;
-/// tapping a file opens it in the viewer. The mark toggle sets that entry —
-/// and for a folder, everything inside it.
+/// One row of the directory tree. Tapping a folder — or a browsable archive —
+/// expands/collapses it; tapping a file opens it in the viewer. The mark toggle
+/// sets that entry, and for a folder (on disk or inside an archive) everything
+/// under it.
 class TreeTile extends ConsumerWidget {
   const TreeTile(this.row, {super.key});
 
@@ -23,6 +25,7 @@ class TreeTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final entry = row.entry;
     final isDir = entry.isDirectory;
+    final canExpand = isDir || isBrowsableArchive(entry);
 
     final mark = ref.watch(
       marksControllerProvider.select(
@@ -36,7 +39,7 @@ class TreeTile extends ConsumerWidget {
 
     return InkWell(
       onTap: () {
-        if (isDir) {
+        if (canExpand) {
           ref.read(treeExpansionProvider.notifier).toggle(entry.path);
         } else {
           ref.read(selectionProvider.notifier).select(entry);
@@ -50,7 +53,7 @@ class TreeTile extends ConsumerWidget {
           children: [
             SizedBox(
               width: 18,
-              child: isDir
+              child: canExpand
                   ? Icon(
                       row.expanded
                           ? Icons.keyboard_arrow_down

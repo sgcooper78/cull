@@ -79,7 +79,7 @@ final class MarksControllerProvider
   MarksController create() => MarksController();
 }
 
-String _$marksControllerHash() => r'e1825081bcfc9c7058dac013a6f3c30607d3d6fd';
+String _$marksControllerHash() => r'2816396fdbf8bd12de64db4416aeb05bf9120493';
 
 /// Source of truth for triage marks. `safe` is implicit (absent from the map).
 

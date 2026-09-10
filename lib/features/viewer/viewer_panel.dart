@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/file_kind.dart';
 import '../../core/formatting.dart';
+import '../../data/archives/archive_entry.dart';
 import '../../data/fs/fs_entry.dart';
 import '../../data/marks/mark.dart';
 import '../../data/marks/marks_controller.dart';
+import 'archive_entry_file.dart';
 import 'scrub_mode_controller.dart';
 import 'selection_controller.dart';
 import 'widgets/archive_view.dart';
@@ -240,15 +242,51 @@ class _Body extends StatelessWidget {
     if (entry.isDirectory) {
       return _FolderNote(key: key, entry: entry);
     }
-    return switch (fileKindOf(entry.name)) {
-      FileKind.image => ImageView(key: key, path: entry.path),
-      FileKind.video => MediaView(key: key, path: entry.path, audioOnly: false),
-      FileKind.audio => MediaView(key: key, path: entry.path, audioOnly: true),
-      FileKind.pdf => PdfView(key: key, path: entry.path),
-      FileKind.comic => ComicView(key: key, path: entry.path),
-      FileKind.text => TextView(key: key, path: entry.path),
-      FileKind.archive => ArchiveView(key: key, path: entry.path),
-      FileKind.other => HexView(key: key, path: entry.path),
-    };
+    if (isArchiveMemberPath(entry.path)) {
+      return _ArchiveEntryBody(key: key, entry: entry);
+    }
+    return bodyForKind(fileKindOf(entry.name), entry.path, key);
+  }
+}
+
+/// Dispatches a real on-disk [path] to the viewer for [kind].
+Widget bodyForKind(FileKind kind, String path, Key key) => switch (kind) {
+  FileKind.image => ImageView(key: key, path: path),
+  FileKind.video => MediaView(key: key, path: path, audioOnly: false),
+  FileKind.audio => MediaView(key: key, path: path, audioOnly: true),
+  FileKind.pdf => PdfView(key: key, path: path),
+  FileKind.comic => ComicView(key: key, path: path),
+  FileKind.text => TextView(key: key, path: path),
+  FileKind.archive => ArchiveView(key: key, path: path),
+  FileKind.other => HexView(key: key, path: path),
+};
+
+/// A file that lives inside an archive: pull it out to a temp file, then hand
+/// the real path to the normal viewer for its kind.
+class _ArchiveEntryBody extends ConsumerWidget {
+  const _ArchiveEntryBody({required this.entry, super.key});
+
+  final FsEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final extracted = ref.watch(archiveEntryFileProvider(entry.path));
+    return extracted.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Could not open this archive entry:\n$e',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+      data: (path) => bodyForKind(
+        fileKindOf(entry.name),
+        path,
+        ValueKey('${entry.path}#extracted'),
+      ),
+    );
   }
 }

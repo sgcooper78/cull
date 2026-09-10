@@ -8,15 +8,21 @@ part of 'tree_controller.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Absolute paths of the directories currently expanded in the tree.
+/// Absolute paths of the directories currently expanded in the tree. Also holds
+/// expanded archive files and archive-member directories, whose paths carry the
+/// `!/` separator.
 
 @ProviderFor(TreeExpansion)
 final treeExpansionProvider = TreeExpansionProvider._();
 
-/// Absolute paths of the directories currently expanded in the tree.
+/// Absolute paths of the directories currently expanded in the tree. Also holds
+/// expanded archive files and archive-member directories, whose paths carry the
+/// `!/` separator.
 final class TreeExpansionProvider
     extends $NotifierProvider<TreeExpansion, Set<String>> {
-  /// Absolute paths of the directories currently expanded in the tree.
+  /// Absolute paths of the directories currently expanded in the tree. Also holds
+  /// expanded archive files and archive-member directories, whose paths carry the
+  /// `!/` separator.
   TreeExpansionProvider._()
     : super(
         from: null,
@@ -46,7 +52,9 @@ final class TreeExpansionProvider
 
 String _$treeExpansionHash() => r'e26a5c333dfc14ed826fa05d54e0ae6a43c51c7c';
 
-/// Absolute paths of the directories currently expanded in the tree.
+/// Absolute paths of the directories currently expanded in the tree. Also holds
+/// expanded archive files and archive-member directories, whose paths carry the
+/// `!/` separator.
 
 abstract class _$TreeExpansion extends $Notifier<Set<String>> {
   Set<String> build();
@@ -68,18 +76,33 @@ abstract class _$TreeExpansion extends $Notifier<Set<String>> {
 
 /// The visible tree, flattened depth-first for a `ListView.builder`. Rebuilds
 /// when the root, the expansion set, or any expanded folder's listing changes.
+///
+/// An expanded archive file (or a folder inside one) draws its children from
+/// [archiveChildrenProvider] instead of [directoryListingProvider]; everything
+/// downstream keeps working because the children are [FsEntry]s with `!/`
+/// paths.
 
 @ProviderFor(treeRows)
 final treeRowsProvider = TreeRowsProvider._();
 
 /// The visible tree, flattened depth-first for a `ListView.builder`. Rebuilds
 /// when the root, the expansion set, or any expanded folder's listing changes.
+///
+/// An expanded archive file (or a folder inside one) draws its children from
+/// [archiveChildrenProvider] instead of [directoryListingProvider]; everything
+/// downstream keeps working because the children are [FsEntry]s with `!/`
+/// paths.
 
 final class TreeRowsProvider
     extends $FunctionalProvider<List<TreeRow>, List<TreeRow>, List<TreeRow>>
     with $Provider<List<TreeRow>> {
   /// The visible tree, flattened depth-first for a `ListView.builder`. Rebuilds
   /// when the root, the expansion set, or any expanded folder's listing changes.
+  ///
+  /// An expanded archive file (or a folder inside one) draws its children from
+  /// [archiveChildrenProvider] instead of [directoryListingProvider]; everything
+  /// downstream keeps working because the children are [FsEntry]s with `!/`
+  /// paths.
   TreeRowsProvider._()
     : super(
         from: null,
@@ -113,4 +136,4 @@ final class TreeRowsProvider
   }
 }
 
-String _$treeRowsHash() => r'b2f9ef7244705075f430b3b0316b6631c58fe16b';
+String _$treeRowsHash() => r'c10fb50b611c7e5242831064f577cb9657cda4ec';
