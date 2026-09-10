@@ -51,8 +51,9 @@ class _Header extends ConsumerWidget {
       ),
     );
     final text = Theme.of(context).textTheme;
+    final isDir = entry.isDirectory;
     final kind = fileKindOf(entry.name);
-    final scrubbing = ref.watch(scrubModeProvider) && kind.isMedia;
+    final scrubbing = ref.watch(scrubModeProvider) && !isDir && kind.isMedia;
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -89,8 +90,8 @@ class _Header extends ConsumerWidget {
                   spacing: 16,
                   runSpacing: 2,
                   children: [
-                    _Fact('Type', kind.name),
-                    _Fact('Size', formatBytes(entry.size)),
+                    _Fact('Type', isDir ? 'folder' : kind.name),
+                    if (!isDir) _Fact('Size', formatBytes(entry.size)),
                     _Fact('Modified', formatDateTime(entry.modified)),
                     _Fact('Changed', formatDateTime(entry.changed)),
                   ],
@@ -110,7 +111,9 @@ class _Header extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'D delete · S keep · Enter next · V scrub',
+                isDir
+                    ? '↑ ↓ move · ← → expand/collapse'
+                    : 'D delete · S keep · Enter next · ↑ ↓ move · V scrub',
                 style: text.bodySmall?.copyWith(
                   color: Theme.of(context).hintColor,
                 ),
@@ -170,6 +173,32 @@ class _Fact extends StatelessWidget {
   }
 }
 
+/// Shown when the selection lands on a folder row (Up/Down can walk onto one).
+class _FolderNote extends StatelessWidget {
+  const _FolderNote({required this.entry, super.key});
+
+  final FsEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.folder, size: 72),
+          const SizedBox(height: 12),
+          Text(entry.name, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            'Folder — press → to expand, ← to collapse',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Body extends StatelessWidget {
   const _Body({required this.entry});
 
@@ -178,6 +207,9 @@ class _Body extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final key = ValueKey(entry.path);
+    if (entry.isDirectory) {
+      return _FolderNote(key: key, entry: entry);
+    }
     return switch (fileKindOf(entry.name)) {
       FileKind.image => ImageView(key: key, path: entry.path),
       FileKind.video => MediaView(key: key, path: entry.path, audioOnly: false),

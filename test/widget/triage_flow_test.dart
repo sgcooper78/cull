@@ -5,6 +5,7 @@ import 'package:cull/features/browser/browse_controller.dart';
 import 'package:cull/features/browser/tree_controller.dart';
 import 'package:cull/features/triage/triage_actions.dart';
 import 'package:cull/features/viewer/selection_controller.dart';
+import 'package:cull/features/viewer/viewer_key_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -109,5 +110,114 @@ void main() {
     expect(advanceSelection(ref), isFalse);
     await tester.pump();
     expect(container.read(selectionProvider)?.name, 'c.txt');
+  });
+
+  testWidgets('moveSelection walks folders too, unlike advanceSelection', (
+    tester,
+  ) async {
+    final (container, ref) = await harness(tester);
+
+    expect(moveSelection(ref, 1), isTrue);
+    await tester.pump();
+    // The folder row comes first in the flattened tree.
+    expect(container.read(selectionProvider)?.path, tp('root/sub'));
+    expect(container.read(selectionProvider)?.isDirectory, isTrue);
+
+    expect(moveSelection(ref, 1), isTrue);
+    await tester.pump();
+    expect(container.read(selectionProvider)?.name, 'a.txt');
+
+    expect(moveSelection(ref, -1), isTrue);
+    await tester.pump();
+    expect(container.read(selectionProvider)?.path, tp('root/sub'));
+  });
+
+  testWidgets(
+    'moveSelection with nothing selected: Down picks first, Up last',
+    (tester) async {
+      final (container, ref) = await harness(tester);
+
+      expect(moveSelection(ref, -1), isTrue);
+      await tester.pump();
+      expect(container.read(selectionProvider)?.name, 'c.txt'); // last row
+
+      container.read(selectionProvider.notifier).clear();
+      expect(moveSelection(ref, 1), isTrue);
+      await tester.pump();
+      expect(
+        container.read(selectionProvider)?.path,
+        tp('root/sub'),
+      ); // first row
+    },
+  );
+
+  testWidgets('moveSelection clamps past the last row', (tester) async {
+    final (container, ref) = await harness(tester);
+    container
+        .read(selectionProvider.notifier)
+        .select(
+          (await fs.list(tp('root'))).firstWhere((e) => e.name == 'c.txt'),
+        );
+    expect(moveSelection(ref, 1), isFalse);
+    await tester.pump();
+    expect(container.read(selectionProvider)?.name, 'c.txt');
+  });
+
+  testWidgets('stepViewer expands/collapses a selected folder', (tester) async {
+    final (container, ref) = await harness(tester);
+    container
+        .read(selectionProvider.notifier)
+        .select((await fs.list(tp('root'))).firstWhere((e) => e.isDirectory));
+
+    expect(stepViewer(ref, forward: true), isTrue);
+    await tester.pump();
+    expect(
+      container.read(treeExpansionProvider).contains(tp('root/sub')),
+      isTrue,
+    );
+
+    expect(stepViewer(ref, forward: false), isTrue);
+    await tester.pump();
+    expect(
+      container.read(treeExpansionProvider).contains(tp('root/sub')),
+      isFalse,
+    );
+  });
+
+  testWidgets('stepViewer defers to a registered viewer handler', (
+    tester,
+  ) async {
+    final (container, ref) = await harness(tester);
+    final steps = <bool>[];
+    container
+        .read(viewerKeyHandlersProvider.notifier)
+        .register(step: ({required bool forward}) => steps.add(forward));
+
+    // A folder is selected, but the viewer handler wins over expand/collapse.
+    container
+        .read(selectionProvider.notifier)
+        .select((await fs.list(tp('root'))).firstWhere((e) => e.isDirectory));
+
+    expect(stepViewer(ref, forward: true), isTrue);
+    expect(stepViewer(ref, forward: false), isTrue);
+    expect(steps, [true, false]);
+    expect(
+      container.read(treeExpansionProvider).contains(tp('root/sub')),
+      isFalse,
+    );
+  });
+
+  testWidgets('jumpViewer only fires when a handler is registered', (
+    tester,
+  ) async {
+    final (container, ref) = await harness(tester);
+    expect(jumpViewer(ref, toEnd: true), isFalse);
+
+    final jumps = <bool>[];
+    container
+        .read(viewerKeyHandlersProvider.notifier)
+        .register(jump: ({required bool toEnd}) => jumps.add(toEnd));
+    expect(jumpViewer(ref, toEnd: true), isTrue);
+    expect(jumps, [true]);
   });
 }

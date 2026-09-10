@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../scrub_mode_controller.dart';
+import '../viewer_key_handler.dart';
 
 /// Plays video and audio via media_kit. **Auto-plays on open** (both video and
 /// audio) so triage is hands-free. Owns a [Player] and disposes it when the
@@ -25,6 +26,8 @@ class MediaView extends ConsumerStatefulWidget {
 }
 
 class _MediaViewState extends ConsumerState<MediaView> {
+  static const _seekStep = Duration(seconds: 10);
+
   late final Player _player = Player();
   late final VideoController _controller = VideoController(_player);
   StreamSubscription<Duration>? _posSub;
@@ -36,6 +39,32 @@ class _MediaViewState extends ConsumerState<MediaView> {
     super.initState();
     _open();
     _posSub = _player.stream.position.listen(_onPosition);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(viewerKeyHandlersProvider.notifier)
+          .register(step: _step, jump: _jump);
+    });
+  }
+
+  /// Left/Right, PageUp/PageDown → skip the playhead by [_seekStep].
+  void _step({required bool forward}) {
+    final dur = _player.state.duration;
+    var target = _player.state.position + (forward ? _seekStep : -_seekStep);
+    if (target < Duration.zero) target = Duration.zero;
+    if (dur > Duration.zero && target > dur) target = dur;
+    _segmentStart = target; // keep scrub mode advancing from here
+    _player.seek(target);
+  }
+
+  /// Home/End → jump to the start / near the end.
+  void _jump({required bool toEnd}) {
+    final dur = _player.state.duration;
+    final target = toEnd && dur > const Duration(seconds: 2)
+        ? dur - const Duration(seconds: 1)
+        : Duration.zero;
+    _segmentStart = target;
+    _player.seek(target);
   }
 
   @override
@@ -82,6 +111,7 @@ class _MediaViewState extends ConsumerState<MediaView> {
 
   @override
   void dispose() {
+    ref.read(viewerKeyHandlersProvider.notifier).clear();
     _posSub?.cancel();
     _player.dispose();
     super.dispose();

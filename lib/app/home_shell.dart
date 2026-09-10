@@ -59,6 +59,25 @@ class HomeShell extends ConsumerWidget {
             advanceSelection(ref),
         const SingleActivator(LogicalKeyboardKey.keyV): () =>
             ref.read(scrubModeProvider.notifier).toggle(),
+        // Up/Down walk every tree row (files and folders); Left/Right and
+        // PageUp/PageDown drive the viewer (comic pages, video seek) or
+        // expand/collapse a selected folder; Home/End jump within the viewer.
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+            moveSelection(ref, 1),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+            moveSelection(ref, -1),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+            stepViewer(ref, forward: true),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+            stepViewer(ref, forward: false),
+        const SingleActivator(LogicalKeyboardKey.pageDown): () =>
+            stepViewer(ref, forward: true),
+        const SingleActivator(LogicalKeyboardKey.pageUp): () =>
+            stepViewer(ref, forward: false),
+        const SingleActivator(LogicalKeyboardKey.home): () =>
+            jumpViewer(ref, toEnd: false),
+        const SingleActivator(LogicalKeyboardKey.end): () =>
+            jumpViewer(ref, toEnd: true),
       },
       child: Focus(
         autofocus: true,
@@ -76,6 +95,8 @@ class HomeShell extends ConsumerWidget {
                     markCurrentAndAdvance(ref, Mark.delete),
                 onMarkCurrentSafe: () => markCurrentAndAdvance(ref, Mark.safe),
                 onNext: () => advanceSelection(ref),
+                onPrevItem: () => moveSelection(ref, -1),
+                onNextItem: () => moveSelection(ref, 1),
                 onToggleScrub: () =>
                     ref.read(scrubModeProvider.notifier).toggle(),
                 onScrubSettings: () => showScrubSettingsDialog(context),
@@ -109,6 +130,8 @@ class _MenuBar extends StatelessWidget {
     required this.onMarkCurrentDelete,
     required this.onMarkCurrentSafe,
     required this.onNext,
+    required this.onPrevItem,
+    required this.onNextItem,
     required this.onToggleScrub,
     required this.onScrubSettings,
   });
@@ -122,6 +145,8 @@ class _MenuBar extends StatelessWidget {
   final VoidCallback onMarkCurrentDelete;
   final VoidCallback onMarkCurrentSafe;
   final VoidCallback onNext;
+  final VoidCallback onPrevItem;
+  final VoidCallback onNextItem;
   final VoidCallback onToggleScrub;
   final VoidCallback onScrubSettings;
 
@@ -177,9 +202,19 @@ class _MenuBar extends StatelessWidget {
           SubmenuButton(
             menuChildren: [
               MenuItemButton(
+                shortcut: const SingleActivator(LogicalKeyboardKey.arrowUp),
+                onPressed: hasRoot ? onPrevItem : null,
+                child: const Text('Previous item'),
+              ),
+              MenuItemButton(
+                shortcut: const SingleActivator(LogicalKeyboardKey.arrowDown),
+                onPressed: hasRoot ? onNextItem : null,
+                child: const Text('Next item'),
+              ),
+              MenuItemButton(
                 shortcut: const SingleActivator(LogicalKeyboardKey.enter),
                 onPressed: hasRoot ? onNext : null,
-                child: const Text('Next file'),
+                child: const Text('Next file (skip folders)'),
               ),
               MenuItemButton(
                 leadingIcon: Icon(

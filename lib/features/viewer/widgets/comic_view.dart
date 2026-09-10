@@ -3,29 +3,32 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/file_kind.dart';
 import '../../../core/natural_sort.dart';
+import '../viewer_key_handler.dart';
 
 /// Page reader for `.cbz` (zip) and `.cbt` (tar) comics. `.cbr` (rar) and
 /// `.cb7` (7z) can't be extracted in pure Dart — those show a message.
 ///
-/// Left/Right or PageUp/PageDown turn pages; Home/End jump to first/last.
-/// Non-navigation keys bubble up to the app's triage shortcuts.
-class ComicView extends StatefulWidget {
+/// Left/Right and PageUp/PageDown turn pages; Home/End jump to first/last.
+/// Those keys arrive through the app-global shortcuts via [ViewerKeyHandlers]
+/// (registered in [initState], cleared in [dispose]) so they work without this
+/// widget holding focus.
+class ComicView extends ConsumerStatefulWidget {
   const ComicView({required this.path, super.key});
 
   final String path;
 
   @override
-  State<ComicView> createState() => _ComicViewState();
+  ConsumerState<ComicView> createState() => _ComicViewState();
 }
 
-class _ComicViewState extends State<ComicView> {
+class _ComicViewState extends ConsumerState<ComicView> {
   static const _maxBytes = 400 << 20; // 400 MiB archive cap
 
-  final FocusNode _focus = FocusNode();
   List<_Page>? _pages;
   Object? _error;
   int _index = 0;
@@ -34,6 +37,12 @@ class _ComicViewState extends State<ComicView> {
   void initState() {
     super.initState();
     _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(viewerKeyHandlersProvider.notifier)
+          .register(step: _step, jump: _jump);
+    });
   }
 
   @override
@@ -51,7 +60,7 @@ class _ComicViewState extends State<ComicView> {
 
   @override
   void dispose() {
-    _focus.dispose();
+    ref.read(viewerKeyHandlersProvider.notifier).clear();
     super.dispose();
   }
 
@@ -93,37 +102,19 @@ class _ComicViewState extends State<ComicView> {
     }
   }
 
+  void _step({required bool forward}) => _go(forward ? 1 : -1);
+
+  void _jump({required bool toEnd}) {
+    final pages = _pages;
+    if (pages == null) return;
+    setState(() => _index = toEnd ? pages.length - 1 : 0);
+  }
+
   void _go(int delta) {
     final pages = _pages;
     if (pages == null) return;
     final next = (_index + delta).clamp(0, pages.length - 1);
     if (next != _index) setState(() => _index = next);
-  }
-
-  KeyEventResult _onKey(FocusNode _, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    final pages = _pages;
-    if (pages == null) return KeyEventResult.ignored;
-
-    switch (event.logicalKey) {
-      case LogicalKeyboardKey.arrowRight:
-      case LogicalKeyboardKey.pageDown:
-        _go(1);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.arrowLeft:
-      case LogicalKeyboardKey.pageUp:
-        _go(-1);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.home:
-        setState(() => _index = 0);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.end:
-        setState(() => _index = pages.length - 1);
-        return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
   }
 
   @override
@@ -145,37 +136,32 @@ class _ComicViewState extends State<ComicView> {
     }
     final page = pages[_index];
 
-    return Focus(
-      focusNode: _focus,
-      autofocus: true,
-      onKeyEvent: _onKey,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: InteractiveViewer(
-              maxScale: 6,
-              child: Center(
-                child: Image.memory(
-                  page.bytes,
-                  key: ValueKey(page.name),
-                  gaplessPlayback: true,
-                  errorBuilder: (_, _, _) => Text('Cannot decode ${page.name}'),
-                ),
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: InteractiveViewer(
+            maxScale: 6,
+            child: Center(
+              child: Image.memory(
+                page.bytes,
+                key: ValueKey(page.name),
+                gaplessPlayback: true,
+                errorBuilder: (_, _, _) => Text('Cannot decode ${page.name}'),
               ),
             ),
           ),
-          _NavZone(alignment: Alignment.centerLeft, onTap: () => _go(-1)),
-          _NavZone(alignment: Alignment.centerRight, onTap: () => _go(1)),
-          Positioned(
-            bottom: 8,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: _PageChip(index: _index, total: pages.length),
-            ),
+        ),
+        _NavZone(alignment: Alignment.centerLeft, onTap: () => _go(-1)),
+        _NavZone(alignment: Alignment.centerRight, onTap: () => _go(1)),
+        Positioned(
+          bottom: 8,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: _PageChip(index: _index, total: pages.length),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -188,7 +174,7 @@ class _Page {
 
   String get name => _file.name;
   Uint8List get bytes =>
-      _cache ??= Uint8List.fromList(_file.content as List<int>);
+      _cache ??= Uint8List.fromList(_file.readBytes() ?? const <int>[]);
 }
 
 class _NavZone extends StatelessWidget {
