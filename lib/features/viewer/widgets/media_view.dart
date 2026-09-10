@@ -43,7 +43,11 @@ class _MediaViewState extends ConsumerState<MediaView> {
       if (!mounted) return;
       ref
           .read(viewerKeyHandlersProvider.notifier)
-          .register(step: _step, jump: _jump);
+          .register(
+            step: _step,
+            jump: _jump,
+            toggle: () => _player.playOrPause(),
+          );
     });
   }
 
@@ -110,6 +114,15 @@ class _MediaViewState extends ConsumerState<MediaView> {
   }
 
   @override
+  void deactivate() {
+    // The selection has moved off this file. `Player.dispose()` (in [dispose],
+    // one frame later) is async and can leave sound trailing, so silence it
+    // now — stepping through the tree with Up/Down must not stack audio.
+    _player.pause();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     ref.read(viewerKeyHandlersProvider.notifier).clear();
     _posSub?.cancel();
@@ -129,14 +142,28 @@ class _MediaViewState extends ConsumerState<MediaView> {
           const SizedBox(height: 16),
           // The Video widget still renders media_kit's transport controls for
           // an audio-only source.
-          SizedBox(
-            height: 80,
-            width: 480,
-            child: Video(controller: _controller),
-          ),
+          SizedBox(height: 80, width: 480, child: _video()),
         ],
       );
     }
-    return Video(controller: _controller);
+    return _video();
   }
+
+  /// [Video] tuned for triage:
+  /// - `playAndPauseOnTap` — a click on the video body (not the seek bar)
+  ///   toggles playback; a double-click still enters fullscreen.
+  /// - `keyboardShortcuts: {}` — media_kit's controls otherwise bind the arrow
+  ///   keys (Up/Down = volume) and space while the video has focus, swallowing
+  ///   them before the app's Up/Down navigation and `stepViewer` seek can run.
+  ///   The app handles all of those; space is wired through
+  ///   [ViewerKeyHandlers.toggle].
+  Widget _video() => MaterialDesktopVideoControlsTheme(
+    normal: kDefaultMaterialDesktopVideoControlsThemeData.copyWith(
+      playAndPauseOnTap: true,
+      keyboardShortcuts: const {},
+    ),
+    fullscreen: kDefaultMaterialDesktopVideoControlsThemeDataFullscreen
+        .copyWith(playAndPauseOnTap: true, keyboardShortcuts: const {}),
+    child: Video(controller: _controller),
+  );
 }

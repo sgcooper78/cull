@@ -41,7 +41,7 @@ final class ViewerKeyHandlersProvider
   }
 }
 
-String _$viewerKeyHandlersHash() => r'a21da074aed344b0659eea36e51240e7462ceec0';
+String _$viewerKeyHandlersHash() => r'96c896262df644290db3e8f0f51dd00d10e8476a';
 
 abstract class _$ViewerKeyHandlers extends $Notifier<ViewerKeyBinding> {
   ViewerKeyBinding build();

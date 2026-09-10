@@ -78,6 +78,14 @@ bool jumpViewer(WidgetRef ref, {required bool toEnd}) {
   return true;
 }
 
+/// Space — toggle playback of the media on screen. No-op for non-media viewers.
+bool togglePlayback(WidgetRef ref) {
+  final handler = ref.read(viewerKeyHandlersProvider).toggle;
+  if (handler == null) return false;
+  handler();
+  return true;
+}
+
 /// Mark the file open in the viewer, then advance to the next one.
 Future<void> markCurrentAndAdvance(WidgetRef ref, Mark mark) async {
   final current = ref.read(selectionProvider);

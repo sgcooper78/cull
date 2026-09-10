@@ -220,4 +220,18 @@ void main() {
     expect(jumpViewer(ref, toEnd: true), isTrue);
     expect(jumps, [true]);
   });
+
+  testWidgets('togglePlayback only fires when a handler is registered', (
+    tester,
+  ) async {
+    final (container, ref) = await harness(tester);
+    expect(togglePlayback(ref), isFalse);
+
+    var toggles = 0;
+    container
+        .read(viewerKeyHandlersProvider.notifier)
+        .register(toggle: () => toggles++);
+    expect(togglePlayback(ref), isTrue);
+    expect(toggles, 1);
+  });
 }

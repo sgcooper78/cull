@@ -91,6 +91,8 @@ class HomeShell extends ConsumerWidget {
             jumpViewer(ref, toEnd: false),
         const SingleActivator(LogicalKeyboardKey.end): () =>
             jumpViewer(ref, toEnd: true),
+        const SingleActivator(LogicalKeyboardKey.space): () =>
+            togglePlayback(ref),
       },
       child: Focus(
         autofocus: true,
