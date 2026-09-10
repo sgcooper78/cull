@@ -131,4 +131,19 @@ void main() {
       '$zipPath!/a/two.jpg',
     ]);
   });
+
+  testWidgets('a comic archive is a leaf, not an expandable tree node', (
+    tester,
+  ) async {
+    fs.addFile(tp('root/book.cbz'));
+    archives.add(tp('root/book.cbz'), 'p01.jpg', [1]);
+
+    final c = await boot(tester);
+    c.read(treeExpansionProvider.notifier).toggle(tp('root/book.cbz'));
+    await tester.pump();
+    await tester.pump();
+
+    // Toggling it does nothing — it opens in the page reader instead.
+    expect(rowPaths(c).where((p) => p.contains('book.cbz!/')), isEmpty);
+  });
 }

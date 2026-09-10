@@ -22,9 +22,13 @@ flattens root + expanded folders depth-first into `List<TreeRow>` (sealed:
 notifier holds the `Set<String>` of open dir paths; each expanded folder watches
 its own `directoryListingProvider(path)` (so N expanded folders = N
 `DirectoryWatcher`s). Tap a folder row → expand/collapse; tap a file → open in
-viewer. `TreeTile` mark toggle: file → `setMark`; **folder →
-`markAllUnder(path, m, includeRoot: true)` — marks the folder and everything
-under it**. "All delete/All safe" bulk buttons act on the whole tree (root).
+viewer. A **browsable archive row** (zip/tar, `isBrowsableArchive`) also
+expands: its children come from `archiveChildrenProvider` as `FsEntry`s with
+`!/` paths (`data/archives/archive_entry.dart`), and `treeRows` recurses into
+them with `archived: true`. `TreeTile` mark toggle: file → `setMark`;
+**folder/archive-folder → `markAllUnder(path, m, includeRoot: true)`** (which
+detects `!/` paths and walks the archive's own listing). "All delete/All safe"
+bulk buttons act on the whole tree (root).
 
 **Sorting** (`SortMenu` in the sidebar header): `SortSettingsController` +
 `SortSettings` (`data/settings/sort_settings.dart`: `key` name/size/modified/type,
@@ -39,41 +43,80 @@ control, body dispatched by `FileKind`:
 - **image** — `ImageView` 3-tier: native decoder (jpg/png/gif/webp/bmp…), `image` package CPU decode in an isolate (tif/tga/ico/psd/pnm…), or a "no pure-Dart decoder" card (heic/avif/jxl/RAW).
 - **video / audio** — `MediaView` (media_kit / ffmpeg — very broad extension table). **Auto-plays on open** (video and audio); disposing on file-change stops playback so there's no overlap while stepping through the triage flow.
 - **pdf** — `PdfView` (`pdfrx` / pdfium). `pdfrxFlutterInitialize()` in `main.dart`.
-- **comic** — `ComicView` pages through `.cbz` (zip) / `.cbt` (tar); arrow / PageUp-Down / Home-End; natural-sorted pages. `.cbr` (RAR) / `.cb7` (7z) show a "needs external extractor" message — no pure-Dart decoder.
+- **comic** — `ComicView` pages through `.cbz` (zip) / `.cbt` (tar); Left/Right / PageUp-Down / Home-End (via `ViewerKeyHandlers`, see keyboard notes); natural-sorted pages. `.cbr` (RAR) / `.cb7` (7z) show a "needs external extractor" message — no pure-Dart decoder.
 - **text** — `TextView` (huge extension table + well-known names like `Dockerfile`, `.gitignore`).
-- **archive** — `ArchiveView` zip entry list. **other** — `HexView`.
+- **archive** — `ArchiveView` zip entry list (fallback for a selected archive; the tree also expands zip/tar inline — see below). **other** — `HexView`.
+- **archive member** — a file inside an expanded archive: `_ArchiveEntryBody` extracts it to a temp file (`archiveEntryFileProvider`, sha1-named cache under the OS temp dir) then hands the real path to the normal per-kind viewer via `bodyForKind`.
+
+**Archives as directories.** `data/archives/` is the seam: `ArchiveReader` /
+`ArchiveWriter` interfaces, `ArchiveResult` sealed type (data/ never throws),
+`archiveFormatOf` + `sniffArchiveFormat` (magic bytes). `PackageArchiveReader` /
+`PackageArchiveWriter` do zip + tar in pure Dart on a background isolate;
+`LibarchiveReader` / `LibarchiveWriter` (hand-written `dart:ffi` binding, no
+ffigen) are wired for 7z/RAR but **dormant** — no native lib is vendored, so
+they return `nativeBackendMissing` and 7z/RAR stay leaves. `CompositeArchive*`
+routes. In the tree, a browsable archive (`isBrowsableArchive` — zip/tar, not
+comics) expands like a folder; children come from `archiveChildrenProvider` as
+`FsEntry`s whose paths carry the `!/` separator (`data/archives/archive_entry.dart`
+— `splitArchivePath` / `rootArchiveOf` / `joinArchivePath`). Selection, marks,
+and the triage walk treat `!/` rows like any other.
 
 `.ts` is classified **video** (MPEG-TS), not TypeScript — deliberate for a media tool.
 
 **Triage flow (keyboard):** `D` = mark viewed file delete + advance, `S` = mark
-keep + advance, `Enter` = advance without marking, `V` = toggle **scrub mode**
-(media only). `Ctrl/Cmd+O` open dir, `Ctrl/Cmd+Shift+D` commit deletions.
-`triage_actions.visibleFiles` = every file row currently visible in the tree,
-top to bottom — so "next" walks **across folders** you've expanded (expand what
-you care about, collapse the rest).
+keep + advance, `Enter` = advance without marking (files only), `V` = toggle
+**scrub mode** (media only). `Ctrl/Cmd+O` open dir, `Ctrl/Cmd+Shift+D` commit
+deletions. `triage_actions.visibleFiles` = every file row currently visible in
+the tree, top to bottom — so "next" walks **across folders** you've expanded.
+
+**Arrow keys** (`triage_actions`, bound in `home_shell`'s `CallbackShortcuts`):
+`Up`/`Down` = `moveSelection` — walk every visible row, folders included (Down
+from nothing → first row, Up from nothing → last). `Left`/`Right` +
+`PageUp`/`PageDown` = `stepViewer`, `Home`/`End` = `jumpViewer`: these call
+whatever the mounted viewer registered in `viewerKeyHandlersProvider`
+(`ComicView` → turn page, `MediaView` → seek ±10s / jump to start/end),
+registered post-frame in `initState`, cleared in `dispose`. With no handler,
+`stepViewer` expands/collapses a selected folder. The registry (not focus
+routing) is used because media_kit's `Video` and pdfrx install focus nodes that
+would otherwise swallow the keys.
 
 **Scrub mode is tunable** — View ▸ Scrub settings… (`ScrubSettings`: `playSeconds`
 1–30, `skipPercent` 5–50 = "~100/skipPercent previews per file"). Persisted to
 `settings.json` in the app-support dir via `SettingsStore` (same interface
 pattern as `MarkStore`); changes apply live to playing media.
 
-`flutter analyze` clean, **72 tests green**, `flutter build windows --debug`
+`flutter analyze` clean, **111 tests green**, `flutter build windows --debug`
 produces `cull.exe`, which launches and runs. `macos/` + `linux/` folders
 generated (macOS App Sandbox **disabled** — see `macos/Runner/*.entitlements`);
-neither built/tested on this Windows machine. Git repo initialized, first commit
-not yet made.
+neither built/tested on this Windows machine.
+
+**App icon:** `assets/branding/cull_logo.svg` master (open ring + one green dot
+on a dark tile) → `windows/runner/resources/app_icon.ico`,
+`macos/.../AppIcon.appiconset/*.png`, `linux/cull.png`. Regenerate with the
+scratchpad `sharp` + `png2icons` script if the SVG changes.
 
 **Not yet done:** thumbnails / `data/thumbs` (empty), magic-byte type detection
-(extension-only), a folder's mark is explicit (last bulk action) not a derived
-tri-state of its children, resizable sidebar, responsive/narrow layout,
-`integration_test/`, Recycle Bin, verifying the macOS/Linux builds. A watcher
-per expanded folder — no cap yet.
+for loose files (`sniffArchiveFormat` exists for archives only), a folder's mark
+is explicit (last bulk action) not a derived tri-state, resizable sidebar,
+responsive/narrow layout, `integration_test/`, Recycle Bin, verifying the
+macOS/Linux builds. A watcher per expanded folder — no cap. **Archives:** the
+native 7z/RAR backend is scaffolded but no lib is vendored; nested archives
+aren't expanded; extracted archive-member temp files aren't evicted; archive
+listings aren't watched (invalidated only after a repackage).
 
 **Format limits (no pure-Dart path on desktop):** HEIC/HEIF/AVIF/JXL and camera
-RAW images (shown as a metadata card, not pixels); `.cbr` (RAR) and `.cb7` (7z)
-comics (message telling the user to convert to `.cbz`). `.ts` reads as video.
-Comic pages are loaded from the archive on demand and cached per page — a giant
-`.cbz` grows memory as you read; eviction is a TODO.
+RAW images (shown as a metadata card, not pixels); `.cbr` (RAR) / `.cb7` (7z)
+comics and `.7z`/`.rar` archives (no working backend — "not installed" card /
+left as tree leaves). `.ts` reads as video. Comic pages and archive-member
+previews are cached without eviction — a giant `.cbz` grows memory as you read.
+
+**Repackage on delete:** marking a file (or folder) *inside* an expanded zip/tar
+and running **Delete marked** rewrites that archive once
+(`ArchiveWriter.rewriteWithout` → sibling `*.cull-tmp` → swap over the original)
+minus the marked entries; `commitDeletions` groups marks by archive, subsumes
+members when the archive file itself is marked, and keeps marks + reports a
+failure if the rewrite fails. The confirm dialog warns that archives will be
+rebuilt (compression/metadata may change).
 
 **Toolchain:**
 - Flutter **3.47.2 stable** at `C:\flutter\flutter` (Dart 3.13.2 bundled).
@@ -92,12 +135,12 @@ Comic pages are loaded from the archive on demand and cached per page — a gian
 - **Filesystem:** `dart:io` (`File`, `Directory`), `path`. **`watcher` — CONFIRMED** for live directory changes. Not up for revisiting.
 - **Images:** `Image.file` + **`photo_view` — CONFIRMED** for zoom/pan. Not up for revisiting. Thumbnails cached in the app-support dir.
 - **Video/audio: `media_kit` — CONFIRMED.** With `media_kit_video`, `media_kit_libs_video`. Chosen over `video_player` for real Windows/desktop support. Not up for revisiting.
-- **Archives: `archive` — CONFIRMED.** Zip/tar listing + `.cbz`/`.cbt` comic pages. Cannot do RAR / 7z.
+- **Archives: `archive` — CONFIRMED** for zip/tar (listing, `.cbz`/`.cbt` pages, browse-as-directory, repackage-on-delete). Cannot do RAR / 7z — `data/archives/libarchive/` has a hand-written `dart:ffi` binding for that, plus `ffi` and `crypto` deps, but no shared lib is vendored yet so it stays dormant.
 - **PDF: `pdfrx`** (pdfium) — in use, not "locked". Downloads/links pdfium at build time.
 - **Extended image decode: `image`** (pure-Dart) — in use for tif/tga/ico/psd/pnm/exr etc.
 - **Paths: `path_provider` — CONFIRMED.** App-support/cache directory resolution. Not up for revisiting.
 - **Marks / review progress:** JSON sidecar via `path_provider` app-support dir, keyed by absolute path (v1). `MarkStore` is an interface — `JsonFileMarkStore` in prod, `InMemoryMarkStore` (test/support) for widget tests. Move to `drift`/SQLite if the catalog grows large.
-- **Delete:** `File.delete()` / `Directory.delete(recursive: true)` via `MarksController.commitDeletions` — marked parent folder subsumes its marked descendants; already-gone paths count as success; locked files surface as failures and keep their mark. Always behind the confirm dialog in `features/triage/delete_marked.dart`. No Recycle Bin in v1 (revisit later via `win32` `SHFileOperation`).
+- **Delete:** `File.delete()` / `Directory.delete(recursive: true)` via `MarksController.commitDeletions` — marked parent folder subsumes its marked descendants; already-gone paths count as success; locked files surface as failures and keep their mark. Marks *inside* an archive (`!/` paths) are applied by rewriting that archive via `ArchiveWriter.rewriteWithout` instead of `File.delete`. Always behind the confirm dialog in `features/triage/delete_marked.dart`. No Recycle Bin in v1 (revisit later via `win32` `SHFileOperation`).
 - **Lints: `flutter_lints` — CONFIRMED.** Baseline rule set. Not up for revisiting.
 - **Packaging — one runnable file per platform, nothing else:** `Cull-<v>-portable.exe` (Windows, Enigma Virtual Box), `Cull-<v>-macos-arm64.dmg`, `Cull-<v>-linux-x64.AppImage`. Scripts in `tool\` → `dist\` (gitignored): `build_portable.ps1` (needs Enigma Virtual Box — CI installs it from the vendor URL since the Chocolatey package is checksum-broken; `gen_evb.ps1` builds the `.evb` from real output, no GUI step; fatal if Enigma missing/rejects), `package_macos.sh [arm64|x64]`, `package_linux.sh`. CI: `.github/workflows/release.yml` — matrix (windows / macos-14 / ubuntu) on `v*` tags + `workflow_dispatch`. Tag → `release` job publishes the files; manual run → downloadable workflow artifacts only. **macOS Intel dropped** — those runners queue for ages and GitHub is retiring them; arm64 only. Runners have every toolchain — no local Mac/Linux needed. Full guide `docs/RELEASING.md`.
 

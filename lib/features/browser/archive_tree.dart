@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../core/file_kind.dart';
 import '../../data/archives/archive_entry.dart';
 import '../../data/archives/archive_format.dart';
 import '../../data/archives/archive_providers.dart';
@@ -9,10 +10,12 @@ part 'archive_tree.g.dart';
 
 final _epoch = DateTime.fromMillisecondsSinceEpoch(0);
 
-/// True for an on-disk archive the tree can expand inline (pure-Dart formats
-/// only for now — 7z/RAR need the native backend and are left as leaves).
+/// True for an on-disk archive the tree can expand inline. Pure-Dart formats
+/// only for now (7z/RAR need the native backend). Comic archives are excluded
+/// on purpose — tapping a `.cbz`/`.cbt` opens the page reader, not the tree.
 bool isBrowsableArchive(FsEntry entry) {
   if (entry.isDirectory) return false;
+  if (fileKindOf(entry.name) == FileKind.comic) return false;
   final format = archiveFormatOf(entry.name);
   return format != null && !format.needsNativeBackend;
 }
