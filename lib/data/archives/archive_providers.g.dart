@@ -99,3 +99,94 @@ final class ArchiveWriterProvider
 }
 
 String _$archiveWriterHash() => r'7aa232e0e8e5965375f6af02e7cf8173c2c151af';
+
+/// Flat entry list of an on-disk archive. Cached; invalidate after a
+/// repackage so the tree re-reads the shrunken archive.
+
+@ProviderFor(archiveEntries)
+final archiveEntriesProvider = ArchiveEntriesFamily._();
+
+/// Flat entry list of an on-disk archive. Cached; invalidate after a
+/// repackage so the tree re-reads the shrunken archive.
+
+final class ArchiveEntriesProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<ArchiveEntry>>,
+          List<ArchiveEntry>,
+          FutureOr<List<ArchiveEntry>>
+        >
+    with
+        $FutureModifier<List<ArchiveEntry>>,
+        $FutureProvider<List<ArchiveEntry>> {
+  /// Flat entry list of an on-disk archive. Cached; invalidate after a
+  /// repackage so the tree re-reads the shrunken archive.
+  ArchiveEntriesProvider._({
+    required ArchiveEntriesFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'archiveEntriesProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$archiveEntriesHash();
+
+  @override
+  String toString() {
+    return r'archiveEntriesProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<List<ArchiveEntry>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<ArchiveEntry>> create(Ref ref) {
+    final argument = this.argument as String;
+    return archiveEntries(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ArchiveEntriesProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$archiveEntriesHash() => r'cc89ce5ca77500f96010400d6f77bccad54fec02';
+
+/// Flat entry list of an on-disk archive. Cached; invalidate after a
+/// repackage so the tree re-reads the shrunken archive.
+
+final class ArchiveEntriesFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<List<ArchiveEntry>>, String> {
+  ArchiveEntriesFamily._()
+    : super(
+        retry: null,
+        name: r'archiveEntriesProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  /// Flat entry list of an on-disk archive. Cached; invalidate after a
+  /// repackage so the tree re-reads the shrunken archive.
+
+  ArchiveEntriesProvider call(String archivePath) =>
+      ArchiveEntriesProvider._(argument: archivePath, from: this);
+
+  @override
+  String toString() => r'archiveEntriesProvider';
+}

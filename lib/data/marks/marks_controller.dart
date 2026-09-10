@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../archives/archive_entry.dart';
 import '../archives/archive_providers.dart';
+import '../archives/archive_result.dart';
 import '../fs/file_source.dart';
 import '../fs/fs_entry.dart';
 import '../fs/fs_providers.dart';
@@ -139,45 +140,91 @@ class MarksController extends _$MarksController {
       if (e.value == Mark.delete) e.key,
   ];
 
-  /// Permanently delete everything marked. A marked parent folder subsumes
-  /// its marked descendants (they are removed with it, not deleted twice).
+  /// Permanently apply every mark. Files and folders on disk are deleted
+  /// outright (a marked folder subsumes its marked descendants). Entries marked
+  /// *inside* an archive are removed by rewriting that archive once to a temp
+  /// file and swapping it in — unless the archive file itself is also being
+  /// deleted, in which case they go with it.
   Future<DeletionResult> commitDeletions() async {
-    final fs = ref.read(fileSourceProvider);
     final targets = deletePaths..sort();
+    final fsTargets = [
+      for (final t in targets)
+        if (!isArchiveMemberPath(t)) t,
+    ];
+    final archiveTargets = [
+      for (final t in targets)
+        if (isArchiveMemberPath(t)) t,
+    ];
 
-    // Drop any path nested under another marked path.
+    var deleted = 0;
+    final failures = <(String, String)>[];
+    final doneFs = <String>{};
+    final doneArchive = <String>{};
+
+    // --- filesystem deletions (files, folders, whole archive files) --------
     final roots = <String>[];
-    for (final path in targets) {
+    for (final path in fsTargets) {
       final covered = roots.any(
         (r) => p.equals(r, path) || p.isWithin(r, path),
       );
       if (!covered) roots.add(path);
     }
-
-    var deleted = 0;
-    final failures = <(String, String)>[];
-    final done = <String>{};
+    final fs = ref.read(fileSourceProvider);
     for (final path in roots) {
       try {
         final entry = await fs.stat(path);
         await fs.delete(path, isDirectory: entry.isDirectory);
         deleted++;
-        done.add(path);
+        doneFs.add(path);
       } on FileSourceException catch (e) {
         if (e.notFound) {
           deleted++; // already gone — treat as success
-          done.add(path);
+          doneFs.add(path);
         } else {
           failures.add((path, e.message));
         }
       }
     }
 
-    // Clear marks for everything successfully removed (and its descendants).
+    bool archiveFileGone(String archivePath) => doneFs.any(
+      (d) => p.equals(d, archivePath) || p.isWithin(d, archivePath),
+    );
+
+    // --- archive-member deletions (repackage each affected archive once) ---
+    final byArchive = <String, List<String>>{};
+    for (final t in archiveTargets) {
+      byArchive.putIfAbsent(rootArchiveOf(t), () => []).add(t);
+    }
+    final writer = ref.read(archiveWriterProvider);
+    for (final entryPair in byArchive.entries) {
+      final archivePath = entryPair.key;
+      final members = entryPair.value;
+      if (archiveFileGone(archivePath)) {
+        doneArchive.addAll(members); // subsumed by the deleted archive file
+        continue;
+      }
+      final remove = {for (final m in members) splitArchivePath(m).$2};
+      final result = await writer.rewriteWithout(archivePath, remove);
+      switch (result) {
+        case ArchiveOk():
+          deleted += remove.length;
+          doneArchive.addAll(members);
+          ref.invalidate(archiveEntriesProvider(archivePath));
+        case ArchiveFailure(:final message):
+          failures.add((archivePath, message));
+      }
+    }
+
+    // --- clear marks for everything that is now gone ----------------------
+    bool removed(String key) {
+      if (doneArchive.contains(key)) return true;
+      final base = isArchiveMemberPath(key) ? rootArchiveOf(key) : key;
+      return doneFs.any((d) => p.equals(d, base) || p.isWithin(d, base));
+    }
+
     final next = <String, Mark>{
       for (final e in _current.entries)
-        if (!done.any((d) => p.equals(d, e.key) || p.isWithin(d, e.key)))
-          e.key: e.value,
+        if (!removed(e.key)) e.key: e.value,
     };
     await _commit(next);
 

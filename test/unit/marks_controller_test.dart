@@ -1,3 +1,4 @@
+import 'package:cull/data/archives/archive_providers.dart';
 import 'package:cull/data/fs/fs_providers.dart';
 import 'package:cull/data/marks/mark.dart';
 import 'package:cull/data/marks/marks_controller.dart';
@@ -5,18 +6,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_file_source.dart';
+import '../support/in_memory_archive.dart';
 import '../support/in_memory_mark_store.dart';
 import '../support/paths.dart';
 
 void main() {
   late FakeFileSource fs;
   late InMemoryMarkStore markStore;
+  late FakeArchiveStore archives;
 
   Future<ProviderContainer> makeContainer() async {
     final container = ProviderContainer(
       overrides: [
         fileSourceProvider.overrideWithValue(fs),
         markStoreProvider.overrideWith((ref) async => markStore),
+        archiveReaderProvider.overrideWithValue(
+          InMemoryArchiveReader(archives),
+        ),
+        archiveWriterProvider.overrideWithValue(
+          InMemoryArchiveWriter(archives),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -26,6 +35,7 @@ void main() {
 
   setUp(() {
     markStore = InMemoryMarkStore();
+    archives = FakeArchiveStore();
     fs = FakeFileSource()
       ..addDir(tp('root'))
       ..addDir(tp('root/sub'))
@@ -123,6 +133,80 @@ void main() {
     expect(result.deleted, 2);
     expect(result.hasFailures, isFalse);
     expect(ctrl.deletePaths, isEmpty);
+  });
+
+  group('archive members', () {
+    final zip = tp('root/pics.zip');
+
+    setUp(() {
+      fs.addFile(zip);
+      archives
+        ..add(zip, 'keep.jpg', [1])
+        ..add(zip, 'a/one.jpg', [2])
+        ..add(zip, 'a/two.jpg', [3]);
+    });
+
+    test('markAllUnder an archive folder marks its members', () async {
+      final c = await makeContainer();
+      final ctrl = c.read(marksControllerProvider.notifier);
+
+      await ctrl.markAllUnder('$zip!/a', Mark.delete, includeRoot: true);
+
+      expect(ctrl.deletePaths..sort(), [
+        '$zip!/a',
+        '$zip!/a/one.jpg',
+        '$zip!/a/two.jpg',
+      ]);
+    });
+
+    test(
+      'commitDeletions repackages the archive without marked entries',
+      () async {
+        final c = await makeContainer();
+        final ctrl = c.read(marksControllerProvider.notifier);
+
+        await ctrl.setMark('$zip!/a/one.jpg', Mark.delete);
+        await ctrl.setMark('$zip!/a/two.jpg', Mark.delete);
+
+        final result = await ctrl.commitDeletions();
+
+        expect(result.deleted, 2);
+        expect(result.hasFailures, isFalse);
+        expect(archives.entriesOf(zip)!.keys.toSet(), {'keep.jpg'});
+        expect(ctrl.deletePaths, isEmpty);
+        expect(fs.deleteCalls, isEmpty); // the .zip file itself stays
+      },
+    );
+
+    test('deleting the archive file subsumes its marked members', () async {
+      final c = await makeContainer();
+      final ctrl = c.read(marksControllerProvider.notifier);
+
+      await ctrl.setMark('$zip!/a/one.jpg', Mark.delete);
+      await ctrl.setMark(zip, Mark.delete);
+
+      final result = await ctrl.commitDeletions();
+
+      expect(result.hasFailures, isFalse);
+      expect(fs.deleteCalls, [zip]);
+      expect(ctrl.deletePaths, isEmpty);
+      // rewrite was skipped — the store still has every entry
+      expect(archives.entriesOf(zip)!.length, 3);
+    });
+
+    test('a failed repackage keeps the member marks and reports it', () async {
+      final c = await makeContainer();
+      final ctrl = c.read(marksControllerProvider.notifier);
+      archives.failRewriteFor.add(zip);
+
+      await ctrl.setMark('$zip!/a/one.jpg', Mark.delete);
+      final result = await ctrl.commitDeletions();
+
+      expect(result.deleted, 0);
+      expect(result.failures.single.$1, zip);
+      expect(ctrl.deletePaths, ['$zip!/a/one.jpg']);
+      expect(archives.entriesOf(zip)!.length, 3);
+    });
   });
 
   test('marks persist across a fresh controller', () async {

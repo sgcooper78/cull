@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/archives/archive_entry.dart';
 import '../../data/marks/marks_controller.dart';
 
 /// Show the confirm dialog for committing deletions, run it, and report the
@@ -16,6 +17,12 @@ Future<void> runDeleteMarked(BuildContext context, WidgetRef ref) async {
     );
     return;
   }
+
+  final archiveCount = paths
+      .where(isArchiveMemberPath)
+      .map(rootArchiveOf)
+      .toSet()
+      .length;
 
   final confirmed = await showDialog<bool>(
     context: context,
@@ -34,6 +41,15 @@ Future<void> runDeleteMarked(BuildContext context, WidgetRef ref) async {
               'This permanently removes them from disk. Folders are '
               'deleted with everything inside them.',
             ),
+            if (archiveCount > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                '$archiveCount archive${archiveCount == 1 ? '' : 's'} will be '
+                'rebuilt without the marked entries — compression settings and '
+                'metadata may change.',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
             const SizedBox(height: 12),
             Expanded(
               child: Container(
