@@ -10,6 +10,6 @@ void main() {
     expect(find.text('File'), findsOneWidget);
     expect(find.text('Mark'), findsOneWidget);
     expect(find.textContaining('No directory open'), findsOneWidget);
-    expect(find.text('Select a file to preview it.'), findsOneWidget);
+    expect(find.textContaining('select a file to preview'), findsOneWidget);
   });
 }

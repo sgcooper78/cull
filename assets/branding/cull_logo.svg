@@ -1,0 +1,19 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Cull</title>
+  <defs>
+    <linearGradient id="tile" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#222A33"/>
+      <stop offset="1" stop-color="#11151A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- app tile -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="url(#tile)"/>
+
+  <!-- the "C": an open ring — reviewing, a dial, a selection in progress -->
+  <path d="M 702.9 702.9 A 270 270 0 1 1 702.9 321.1"
+        stroke="#EDF0F3" stroke-width="128" stroke-linecap="round" fill="none"/>
+
+  <!-- the one picked out of the many -->
+  <circle cx="762" cy="512" r="76" fill="#2FBF87"/>
+</svg>

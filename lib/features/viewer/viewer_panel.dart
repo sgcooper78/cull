@@ -25,7 +25,7 @@ class ViewerPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final entry = ref.watch(selectionProvider);
     if (entry == null) {
-      return const Center(child: Text('Select a file to preview it.'));
+      return const _EmptyState();
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -34,6 +34,36 @@ class ViewerPanel extends ConsumerWidget {
         const Divider(height: 1),
         Expanded(child: _Body(entry: entry)),
       ],
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/branding/cull_icon_256.png',
+            width: 96,
+            height: 96,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (_, _, _) => const SizedBox(width: 96, height: 96),
+          ),
+          const SizedBox(height: 16),
+          Text('Cull', style: text.headlineSmall),
+          const SizedBox(height: 4),
+          Text(
+            'Open a folder, then select a file to preview it.',
+            style: text.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+          ),
+        ],
+      ),
     );
   }
 }
