@@ -9,6 +9,7 @@ class InMemorySettingsStore implements SettingsStore {
   ScrubSettings? scrub;
   SortSettings? sort;
   Map<String, String> resume = {};
+  List<String> recentFolders = [];
 
   @override
   Future<ScrubSettings?> loadScrub() async => scrub;
@@ -28,4 +29,11 @@ class InMemorySettingsStore implements SettingsStore {
   @override
   Future<void> saveResume(Map<String, String> lastFileByRoot) async =>
       resume = Map.of(lastFileByRoot);
+
+  @override
+  Future<List<String>> loadRecentFolders() async => List.of(recentFolders);
+
+  @override
+  Future<void> saveRecentFolders(List<String> paths) async =>
+      recentFolders = List.of(paths);
 }

@@ -54,6 +54,12 @@ void main() {
     expect(await store.loadSort(), SortSettings.defaults);
   });
 
+  test('recent folders round-trip', () async {
+    expect(await store.loadRecentFolders(), isEmpty);
+    await store.saveRecentFolders([r'C:\b', r'C:\a']);
+    expect(await store.loadRecentFolders(), [r'C:\b', r'C:\a']);
+  });
+
   test('saveScrub leaves unrelated keys intact', () async {
     await file.writeAsString(jsonEncode({'other': 42}));
     await store.saveScrub(const ScrubSettings(playSeconds: 3, skipPercent: 10));

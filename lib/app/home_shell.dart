@@ -1,13 +1,15 @@
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../data/marks/mark.dart';
 import '../data/marks/marks_controller.dart';
 import '../features/browser/browse_controller.dart';
 import '../features/browser/browser_panel.dart';
+import '../features/browser/open_directory.dart';
+import '../features/browser/recent_folders.dart';
 import '../features/browser/resume.dart';
 import '../features/triage/delete_marked.dart';
 import '../features/triage/triage_actions.dart';
@@ -28,13 +30,6 @@ class HomeShell extends ConsumerWidget {
 
   static const path = '/';
 
-  Future<void> _openDirectory(WidgetRef ref) async {
-    final dir = await getDirectoryPath();
-    if (dir == null) return;
-    ref.read(selectionProvider.notifier).clear();
-    ref.read(browseProvider.notifier).openRoot(dir);
-  }
-
   void _markAll(WidgetRef ref, Mark mark) {
     final root = ref.read(browseProvider);
     if (root == null) return;
@@ -45,6 +40,7 @@ class HomeShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final hasRoot = ref.watch(browseProvider) != null;
     final scrubOn = ref.watch(scrubModeProvider);
+    final recents = ref.watch(recentFoldersProvider);
 
     // Resume: jump back to the last file when a directory is (re)opened, and
     // record the current file as we move through it.
@@ -60,7 +56,7 @@ class HomeShell extends ConsumerWidget {
 
     return CallbackShortcuts(
       bindings: {
-        _menuKey(LogicalKeyboardKey.keyO): () => _openDirectory(ref),
+        _menuKey(LogicalKeyboardKey.keyO): () => pickAndOpenDirectory(ref),
         _menuKey(LogicalKeyboardKey.keyD, shift: true): () =>
             runDeleteMarked(context, ref),
         // Triage flow — mark the viewed file and step to the next one.
@@ -102,7 +98,9 @@ class HomeShell extends ConsumerWidget {
               _MenuBar(
                 hasRoot: hasRoot,
                 scrubOn: scrubOn,
-                onOpen: () => _openDirectory(ref),
+                recents: recents,
+                onOpen: () => pickAndOpenDirectory(ref),
+                onOpenRecent: (path) => openRootFolder(ref, path),
                 onDeleteMarked: () => runDeleteMarked(context, ref),
                 onMarkAllDelete: () => _markAll(ref, Mark.delete),
                 onMarkAllSafe: () => _markAll(ref, Mark.safe),
@@ -138,7 +136,9 @@ class _MenuBar extends StatelessWidget {
   const _MenuBar({
     required this.hasRoot,
     required this.scrubOn,
+    required this.recents,
     required this.onOpen,
+    required this.onOpenRecent,
     required this.onDeleteMarked,
     required this.onMarkAllDelete,
     required this.onMarkAllSafe,
@@ -153,7 +153,9 @@ class _MenuBar extends StatelessWidget {
 
   final bool hasRoot;
   final bool scrubOn;
+  final List<String> recents;
   final VoidCallback onOpen;
+  final ValueChanged<String> onOpenRecent;
   final VoidCallback onDeleteMarked;
   final VoidCallback onMarkAllDelete;
   final VoidCallback onMarkAllSafe;
@@ -181,6 +183,28 @@ class _MenuBar extends StatelessWidget {
                 shortcut: _menuKey(LogicalKeyboardKey.keyO),
                 onPressed: onOpen,
                 child: const Text('Open Directory…'),
+              ),
+              SubmenuButton(
+                menuChildren: recents.isEmpty
+                    ? [
+                        const MenuItemButton(
+                          onPressed: null,
+                          child: Text('No recent folders'),
+                        ),
+                      ]
+                    : [
+                        for (final path in recents)
+                          MenuItemButton(
+                            onPressed: () => onOpenRecent(path),
+                            child: Text(
+                              p.basename(path).isEmpty
+                                  ? path
+                                  : p.basename(path),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                child: const Text('Recent Folders'),
               ),
               MenuItemButton(
                 shortcut: _menuKey(LogicalKeyboardKey.keyD, shift: true),

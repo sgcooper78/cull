@@ -28,6 +28,10 @@ abstract interface class SettingsStore {
   Future<Map<String, String>> loadResume();
   Future<void> saveResume(Map<String, String> lastFileByRoot);
 
+  /// Recently opened root folders, most-recent first.
+  Future<List<String>> loadRecentFolders();
+  Future<void> saveRecentFolders(List<String> paths);
+
   static Future<SettingsStore> open() async {
     final dir = await getApplicationSupportDirectory();
     return JsonFileSettingsStore(File(p.join(dir.path, 'settings.json')));
@@ -51,7 +55,7 @@ class JsonFileSettingsStore implements SettingsStore {
     }
   }
 
-  Future<void> _writeKey(String key, Map<String, dynamic> value) async {
+  Future<void> _writeKey(String key, Object? value) async {
     final all = await _readAll()
       ..[key] = value;
     await _file.parent.create(recursive: true);
@@ -93,4 +97,18 @@ class JsonFileSettingsStore implements SettingsStore {
   @override
   Future<void> saveResume(Map<String, String> lastFileByRoot) =>
       _writeKey('resume', lastFileByRoot);
+
+  @override
+  Future<List<String>> loadRecentFolders() async {
+    final recent = (await _readAll())['recent'];
+    if (recent is! List) return [];
+    return [
+      for (final e in recent)
+        if (e is String) e,
+    ];
+  }
+
+  @override
+  Future<void> saveRecentFolders(List<String> paths) =>
+      _writeKey('recent', paths);
 }

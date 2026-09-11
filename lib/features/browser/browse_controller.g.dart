@@ -128,7 +128,7 @@ final class DirectoryListingProvider
   }
 }
 
-String _$directoryListingHash() => r'45a5f330084d0444bfaa13e80df62d1ba2dfa2cf';
+String _$directoryListingHash() => r'e57c992fbdb21e32e77bf466387a83fc64a79c36';
 
 /// Live contents of [dirPath]: an initial listing plus a refresh whenever the
 /// OS reports a change in that folder. One instance per expanded tree node.

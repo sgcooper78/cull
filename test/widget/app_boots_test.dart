@@ -1,4 +1,5 @@
 import 'package:cull/app/app.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +11,7 @@ void main() {
     expect(find.text('File'), findsOneWidget);
     expect(find.text('Mark'), findsOneWidget);
     expect(find.textContaining('No directory open'), findsOneWidget);
-    expect(find.textContaining('select a file to preview'), findsOneWidget);
+    expect(find.textContaining('Open a folder'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Open Folder'), findsOneWidget);
   });
 }
