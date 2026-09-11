@@ -13,6 +13,12 @@ class IoFileSource implements FileSource {
   String? get homePath =>
       Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
 
+  /// How many children to `stat` concurrently. A folder with tens of
+  /// thousands of entries would otherwise take a long time to list — one
+  /// awaited `stat` at a time — and that cost is paid again on every
+  /// [listRecursive]-free re-list the directory watcher triggers.
+  static const _statConcurrency = 64;
+
   @override
   Future<List<FsEntry>> list(String dirPath) async {
     final dir = Directory(dirPath);
@@ -23,17 +29,28 @@ class IoFileSource implements FileSource {
         notFound: true,
       );
     }
-    final entries = <FsEntry>[];
+    final children = <FileSystemEntity>[];
     try {
       await for (final e in dir.list(followLinks: false)) {
-        try {
-          entries.add(await _toEntry(e));
-        } on FileSystemException {
-          // Unreadable child (locked, permission) — skip it.
-        }
+        children.add(e);
       }
     } on FileSystemException catch (e) {
       throw FileSourceException(dirPath, e.message, cause: e);
+    }
+
+    final entries = <FsEntry>[];
+    for (var i = 0; i < children.length; i += _statConcurrency) {
+      final batch = children.skip(i).take(_statConcurrency);
+      final stated = await Future.wait(
+        batch.map((e) async {
+          try {
+            return await _toEntry(e);
+          } on FileSystemException {
+            return null; // unreadable child (locked, permission) — skip it
+          }
+        }),
+      );
+      entries.addAll(stated.nonNulls);
     }
 
     entries.sort((a, b) {

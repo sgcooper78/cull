@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +25,25 @@ class ComicView extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<ComicView> createState() => _ComicViewState();
+}
+
+/// Top-level so it can run in an isolate via [compute] — parsing a `.cbz`/
+/// `.cbt` and decompressing every page is CPU-bound enough to freeze the UI
+/// thread for a large comic (same reasoning as [decodeImageToPng] in
+/// `image_view.dart`). Pages come back as plain bytes rather than
+/// [ArchiveFile]s because the latter aren't sendable across the isolate
+/// boundary.
+List<(String name, Uint8List bytes)> decodeComicPages((Uint8List, bool) args) {
+  final (bytes, isTar) = args;
+  final archive = isTar
+      ? TarDecoder().decodeBytes(bytes)
+      : ZipDecoder().decodeBytes(bytes);
+  final pages = [
+    for (final e in archive)
+      if (e.isFile && fileKindOf(e.name) == FileKind.image)
+        (e.name, Uint8List.fromList(e.readBytes() ?? const <int>[])),
+  ]..sort((a, b) => naturalCompare(a.$1.toLowerCase(), b.$1.toLowerCase()));
+  return pages;
 }
 
 class _ComicViewState extends ConsumerState<ComicView> {
@@ -79,18 +99,8 @@ class _ComicViewState extends ConsumerState<ComicView> {
         throw const _ComicError('Comic archive is larger than 400 MiB.');
       }
       final bytes = await file.readAsBytes();
-      final archive = ext == '.cbt'
-          ? TarDecoder().decodeBytes(bytes)
-          : ZipDecoder().decodeBytes(bytes);
-
-      final pages =
-          [
-            for (final e in archive)
-              if (e.isFile && fileKindOf(e.name) == FileKind.image) _Page(e),
-          ]..sort(
-            (a, b) =>
-                naturalCompare(a.name.toLowerCase(), b.name.toLowerCase()),
-          );
+      final decoded = await compute(decodeComicPages, (bytes, ext == '.cbt'));
+      final pages = [for (final (name, data) in decoded) _Page(name, data)];
 
       if (pages.isEmpty) {
         throw const _ComicError('No image pages found in this archive.');
@@ -167,14 +177,10 @@ class _ComicViewState extends ConsumerState<ComicView> {
 }
 
 class _Page {
-  _Page(this._file);
+  const _Page(this.name, this.bytes);
 
-  final ArchiveFile _file;
-  Uint8List? _cache;
-
-  String get name => _file.name;
-  Uint8List get bytes =>
-      _cache ??= Uint8List.fromList(_file.readBytes() ?? const <int>[]);
+  final String name;
+  final Uint8List bytes;
 }
 
 class _NavZone extends StatelessWidget {

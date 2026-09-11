@@ -9,9 +9,14 @@ import '../scrub_mode_controller.dart';
 import '../viewer_key_handler.dart';
 
 /// Plays video and audio via media_kit. **Auto-plays on open** (both video and
-/// audio) so triage is hands-free. Owns a [Player] and disposes it when the
-/// widget unmounts or the path changes — a file the app still has open cannot
-/// be deleted on Windows, and disposing stops playback before the next file.
+/// audio) so triage is hands-free. Owns one [Player] for as long as the
+/// viewer keeps showing media files back to back (see the shared key in
+/// `bodyForKind`) — stepping to another media file reopens the same player
+/// (debounced, see [_openDelay]) instead of constructing a new native player
+/// per file, which is expensive enough to bog down rapid triage. The player
+/// is only disposed when the widget actually unmounts (selection leaves media
+/// entirely) — a file the app still has open cannot be deleted on Windows, so
+/// disposing/reopening always fully lets go of the outgoing file first.
 ///
 /// Scrub mode (toggled globally via [scrubModeProvider]): play a short window,
 /// jump forward a fraction of the duration, repeat — a fast skim for triage.
@@ -28,9 +33,18 @@ class MediaView extends ConsumerStatefulWidget {
 class _MediaViewState extends ConsumerState<MediaView> {
   static const _seekStep = Duration(seconds: 10);
 
+  /// How long a file has to stay selected before it's actually opened. Since
+  /// [MediaView] is reused across video/audio files (see [bodyForKind]),
+  /// without this a held arrow/D/S key stepping through many files back to
+  /// back would fire a real `Player.open()` — probing the file, spinning up
+  /// hardware decode — for every file passed over, not just the one landed
+  /// on.
+  static const _openDelay = Duration(milliseconds: 150);
+
   late final Player _player = Player();
   late final VideoController _controller = VideoController(_player);
   StreamSubscription<Duration>? _posSub;
+  Timer? _openDebounce;
   Duration _segmentStart = Duration.zero;
   bool _seeking = false;
 
@@ -76,7 +90,12 @@ class _MediaViewState extends ConsumerState<MediaView> {
     super.didUpdateWidget(old);
     if (old.path != widget.path) {
       _segmentStart = Duration.zero;
-      _open();
+      // Stop the outgoing file immediately so stepping through several files
+      // doesn't stack audio/decoding while we wait to see if the selection
+      // settles; the actual open is debounced below.
+      _player.pause();
+      _openDebounce?.cancel();
+      _openDebounce = Timer(_openDelay, _open);
     }
   }
 
@@ -124,6 +143,7 @@ class _MediaViewState extends ConsumerState<MediaView> {
 
   @override
   void dispose() {
+    _openDebounce?.cancel();
     ref.read(viewerKeyHandlersProvider.notifier).clear();
     _posSub?.cancel();
     _player.dispose();

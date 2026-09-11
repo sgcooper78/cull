@@ -249,11 +249,20 @@ class _Body extends StatelessWidget {
   }
 }
 
+/// Every video/audio file shares this key so stepping from one media file to
+/// the next reuses the same [MediaView] (and its one native player) instead
+/// of tearing down and rebuilding a `media_kit` `Player` per file — rapid
+/// Up/Down/D/S through a folder of videos would otherwise construct and
+/// destroy native, GPU-backed player instances many times a second, which is
+/// heavy enough to wedge the graphics driver. [MediaView] already opens each
+/// new path in place via `didUpdateWidget` (debounced) once it isn't remounted.
+const _mediaViewKey = ValueKey('media-view');
+
 /// Dispatches a real on-disk [path] to the viewer for [kind].
 Widget bodyForKind(FileKind kind, String path, Key key) => switch (kind) {
   FileKind.image => ImageView(key: key, path: path),
-  FileKind.video => MediaView(key: key, path: path, audioOnly: false),
-  FileKind.audio => MediaView(key: key, path: path, audioOnly: true),
+  FileKind.video => MediaView(key: _mediaViewKey, path: path, audioOnly: false),
+  FileKind.audio => MediaView(key: _mediaViewKey, path: path, audioOnly: true),
   FileKind.pdf => PdfView(key: key, path: path),
   FileKind.comic => ComicView(key: key, path: path),
   FileKind.text => TextView(key: key, path: path),

@@ -36,15 +36,24 @@ Stream<List<FsEntry>> directoryListing(Ref ref, String dirPath) {
 
   unawaited(refresh());
 
+  // Coalesce bursts of filesystem events (a big copy/extract, repeated
+  // writes, antivirus/indexer churn) into one re-list instead of re-listing —
+  // and re-stat'ing every child — on every single event. An unthrottled
+  // watcher on a busy folder can otherwise pile up overlapping re-lists and
+  // pin a CPU core for as long as the folder keeps changing.
+  Timer? debounce;
   StreamSubscription<WatchEvent>? sub;
   try {
-    sub = DirectoryWatcher(dirPath).events
-        .listen((_) => refresh(), onError: (_) {});
+    sub = DirectoryWatcher(dirPath).events.listen((_) {
+      debounce?.cancel();
+      debounce = Timer(const Duration(milliseconds: 300), refresh);
+    }, onError: (_) {});
   } catch (_) {
     // Watching is best-effort; the initial listing still works.
   }
 
   ref.onDispose(() {
+    debounce?.cancel();
     sub?.cancel();
     controller.close();
   });
