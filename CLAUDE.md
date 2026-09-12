@@ -242,11 +242,22 @@ Slash commands wrap the common ones: `/check`, `/run`, `/deps`, `/feature`.
 
 ## Agents (`.claude/agents/`)
 
+`cull-lead` is the entry point for anything spanning more than one area —
+it breaks the work into subtasks and dispatches them to the right
+specialist(s) below. Go straight to a specialist for a task that's clearly
+inside one area.
+
 | Agent | Use for |
 |-------|---------|
+| `cull-lead` | **Manager.** Multi-part/cross-area work — plans, delegates to the specialists below, integrates results |
 | `flutter-architect` | Planning features and structural changes (returns a plan, not code) |
 | `flutter-ui-builder` | Building/altering feature UI and Riverpod providers under `lib/features/` |
+| `riverpod-state-specialist` | Provider design/audit — lifecycle, `keepAlive`, hydrate-from-storage races, codegen hygiene |
 | `media-preview-specialist` | The preview pipeline, thumbnails, format detection (`lib/features/viewer/`, `lib/data/thumbs/`) |
-| `platform-integration` | Filesystem/`FileSource`, delete semantics, method channels, Windows build, packaging |
+| `archive-specialist` | The archive data layer (`lib/data/archives/`) — zip/tar, the dormant 7z/RAR backend, repackage-on-delete |
+| `platform-integration` | Filesystem/`FileSource`, delete semantics, method channels, Windows/macOS/Linux runner config |
+| `performance-auditor` | CPU/memory pegging, UI-thread freezes, native-resource churn, unthrottled watchers/caches |
+| `security-reviewer` | Destructive-op and path-handling safety — the delete path, archive extraction, confirm-dialog gating |
 | `flutter-test-writer` | Unit / widget / integration tests |
 | `dart-reviewer` | Reviewing a diff before commit |
+| `release-manager` | Version bump, git tag, push, and the release CI/packaging scripts |

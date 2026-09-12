@@ -18,6 +18,6 @@ metadata/hex fallback for everything else.
 - Never load a whole large file to preview it. Stream it, decode a bounded region, or show metadata only past a size threshold.
 - Thumbnails: generate off the UI isolate (`compute`/`Isolate`); cache to the app-support dir keyed by `path + mtime + size`; evict by LRU with a size cap.
 - Every player/decoder is disposed when the viewed file changes or the widget unmounts. A file the app still holds open cannot be deleted on Windows.
-- Archives: list entries and preview a single entry without full extraction.
+- Archives: list entries and preview a single entry without full extraction. The archive *data layer* itself (`ArchiveReader`/`Writer`, format detection, repackage-on-delete) is `lib/data/archives/` — that's `archive-specialist`'s territory; this role owns how results are rendered (`ComicView`, `ArchiveView`, archive-member extraction into the normal per-kind viewer).
 - Unknown/binary: show size, created/modified dates, full path, magic-byte guess, and the first bytes as hex.
 - Verify with `flutter analyze` and `flutter test`; add tests for the type resolver and the cache key/eviction logic.
