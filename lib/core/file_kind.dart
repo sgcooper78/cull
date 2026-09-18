@@ -15,6 +15,10 @@ enum FileKind {
   other;
 
   bool get isMedia => this == image || this == video || this == audio;
+
+  /// True for anything [ScrubMode] can skim: video/audio playback windows,
+  /// or comic pages.
+  bool get isScrubbable => isMedia || this == comic;
 }
 
 /// How an [FileKind.image] file can actually be shown.

@@ -118,7 +118,7 @@ class _MediaViewState extends ConsumerState<MediaView> {
   void _onPosition(Duration pos) {
     if (!ref.read(scrubModeProvider) || _seeking) return;
 
-    final settings = ref.read(scrubSettingsControllerProvider);
+    final settings = ref.read(mediaScrubSettingsControllerProvider);
     if (pos - _segmentStart < settings.playWindow) return;
 
     final dur = _player.state.duration;

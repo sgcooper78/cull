@@ -80,10 +80,22 @@ registered post-frame in `initState`, cleared in `dispose`. With no handler,
 routing) is used because media_kit's `Video` and pdfrx install focus nodes that
 would otherwise swallow the keys.
 
-**Scrub mode is tunable** — View ▸ Scrub settings… (`ScrubSettings`: `playSeconds`
-1–30, `skipPercent` 5–50 = "~100/skipPercent previews per file"). Persisted to
-`settings.json` in the app-support dir via `SettingsStore` (same interface
-pattern as `MarkStore`); changes apply live to playing media.
+**Scrub mode is tunable** — View ▸ Scrub settings… covers two independent
+setting groups, both live in `data/settings/scrub_settings.dart` and both
+controlled by the one global `V`-key toggle (`scrubModeProvider`), with each
+viewer reacting per its own kind (`FileKind.isScrubbable` = media or comic):
+`MediaScrubSettings` (video/audio, `MediaView`): `playSeconds` 1–30,
+`skipPercent` 1–50 = "~100/skipPercent previews per file"; `ComicScrubSettings`
+(`.cbz`/`.cbt`, `ComicView`): `pageSeconds` 1–30 dwell per page, `pageSkip`
+1–50 pages jumped each step, wrapping at the end
+(`nextScrubPageIndex`). Both persist to `settings.json` in the app-support dir
+via `SettingsStore` (`"scrub"` / `"comicScrub"` keys; `MediaScrubSettingsController`
+/ `ComicScrubSettingsController`, same interface pattern as `MarkStore`);
+changes apply live to playing media or an open comic. **Comic page resume:**
+`SettingsStore` also has a `"comicPages"` key (`{comicPath: pageName}`);
+`features/viewer/comic_resume.dart` (`rememberComicPage`/`lastComicPage`,
+capped and trimmed like `resume.dart`'s root list) saves the current page
+(debounced, flushed on close) and `ComicView` reopens on that page next time.
 
 **Resume.** Delete marks persist by absolute path in `marks.json` (absent =
 safe — only delete is written). On top of that, `SettingsStore` has a `"resume"`

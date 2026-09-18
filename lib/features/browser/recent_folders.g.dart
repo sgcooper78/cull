@@ -50,7 +50,7 @@ final class RecentFoldersProvider
   }
 }
 
-String _$recentFoldersHash() => r'77b9016ed742b72f0c2ac765d7248b2add598fcc';
+String _$recentFoldersHash() => r'a72b013d5e4cb71df65e1f3045983d2c1a784294';
 
 /// Recently opened root folders, most-recent first. Starts empty, swaps in
 /// the persisted list once loaded (same pattern as [SortSettingsController]),

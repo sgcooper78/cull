@@ -166,7 +166,8 @@ class _Header extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     final isDir = entry.isDirectory;
     final kind = fileKindOf(entry.name);
-    final scrubbing = ref.watch(scrubModeProvider) && !isDir && kind.isMedia;
+    final scrubbing =
+        ref.watch(scrubModeProvider) && !isDir && kind.isScrubbable;
 
     return Padding(
       padding: const EdgeInsets.all(12),

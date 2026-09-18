@@ -17,8 +17,11 @@ Future<SettingsStore> settingsStore(Ref ref) => SettingsStore.open();
 /// Persists user settings. Same pattern as `MarkStore`: an interface with a
 /// JSON-file implementation for production and an in-memory one for tests.
 abstract interface class SettingsStore {
-  Future<ScrubSettings?> loadScrub();
-  Future<void> saveScrub(ScrubSettings settings);
+  Future<MediaScrubSettings?> loadScrub();
+  Future<void> saveScrub(MediaScrubSettings settings);
+
+  Future<ComicScrubSettings?> loadComicScrub();
+  Future<void> saveComicScrub(ComicScrubSettings settings);
 
   Future<SortSettings?> loadSort();
   Future<void> saveSort(SortSettings settings);
@@ -27,6 +30,11 @@ abstract interface class SettingsStore {
   /// reopening a directory can jump straight back to where triage left off.
   Future<Map<String, String>> loadResume();
   Future<void> saveResume(Map<String, String> lastFileByRoot);
+
+  /// Last page viewed in each comic (`{comicPath: pageName}`), so reopening a
+  /// `.cbz`/`.cbt` can jump straight back to where triage left off.
+  Future<Map<String, String>> loadComicPages();
+  Future<void> saveComicPages(Map<String, String> pageByComicPath);
 
   /// Recently opened root folders, most-recent first.
   Future<List<String>> loadRecentFolders();
@@ -63,15 +71,26 @@ class JsonFileSettingsStore implements SettingsStore {
   }
 
   @override
-  Future<ScrubSettings?> loadScrub() async {
+  Future<MediaScrubSettings?> loadScrub() async {
     final scrub = (await _readAll())['scrub'];
     if (scrub is! Map<String, dynamic>) return null;
-    return ScrubSettings.fromJson(scrub);
+    return MediaScrubSettings.fromJson(scrub);
   }
 
   @override
-  Future<void> saveScrub(ScrubSettings settings) =>
+  Future<void> saveScrub(MediaScrubSettings settings) =>
       _writeKey('scrub', settings.toJson());
+
+  @override
+  Future<ComicScrubSettings?> loadComicScrub() async {
+    final scrub = (await _readAll())['comicScrub'];
+    if (scrub is! Map<String, dynamic>) return null;
+    return ComicScrubSettings.fromJson(scrub);
+  }
+
+  @override
+  Future<void> saveComicScrub(ComicScrubSettings settings) =>
+      _writeKey('comicScrub', settings.toJson());
 
   @override
   Future<SortSettings?> loadSort() async {
@@ -97,6 +116,20 @@ class JsonFileSettingsStore implements SettingsStore {
   @override
   Future<void> saveResume(Map<String, String> lastFileByRoot) =>
       _writeKey('resume', lastFileByRoot);
+
+  @override
+  Future<Map<String, String>> loadComicPages() async {
+    final pages = (await _readAll())['comicPages'];
+    if (pages is! Map) return {};
+    return {
+      for (final e in pages.entries)
+        if (e.value is String) '${e.key}': e.value as String,
+    };
+  }
+
+  @override
+  Future<void> saveComicPages(Map<String, String> pageByComicPath) =>
+      _writeKey('comicPages', pageByComicPath);
 
   @override
   Future<List<String>> loadRecentFolders() async {

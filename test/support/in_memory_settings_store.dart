@@ -4,18 +4,28 @@ import 'package:cull/data/settings/sort_settings.dart';
 
 /// [SettingsStore] with no disk IO, for tests.
 class InMemorySettingsStore implements SettingsStore {
-  InMemorySettingsStore({this.scrub, this.sort});
+  InMemorySettingsStore({this.scrub, this.comicScrub, this.sort});
 
-  ScrubSettings? scrub;
+  MediaScrubSettings? scrub;
+  ComicScrubSettings? comicScrub;
   SortSettings? sort;
   Map<String, String> resume = {};
+  Map<String, String> comicPages = {};
   List<String> recentFolders = [];
 
   @override
-  Future<ScrubSettings?> loadScrub() async => scrub;
+  Future<MediaScrubSettings?> loadScrub() async => scrub;
 
   @override
-  Future<void> saveScrub(ScrubSettings settings) async => scrub = settings;
+  Future<void> saveScrub(MediaScrubSettings settings) async =>
+      scrub = settings;
+
+  @override
+  Future<ComicScrubSettings?> loadComicScrub() async => comicScrub;
+
+  @override
+  Future<void> saveComicScrub(ComicScrubSettings settings) async =>
+      comicScrub = settings;
 
   @override
   Future<SortSettings?> loadSort() async => sort;
@@ -29,6 +39,13 @@ class InMemorySettingsStore implements SettingsStore {
   @override
   Future<void> saveResume(Map<String, String> lastFileByRoot) async =>
       resume = Map.of(lastFileByRoot);
+
+  @override
+  Future<Map<String, String>> loadComicPages() async => Map.of(comicPages);
+
+  @override
+  Future<void> saveComicPages(Map<String, String> pageByComicPath) async =>
+      comicPages = Map.of(pageByComicPath);
 
   @override
   Future<List<String>> loadRecentFolders() async => List.of(recentFolders);

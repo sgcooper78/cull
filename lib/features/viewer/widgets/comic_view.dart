@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -9,6 +10,8 @@ import 'package:path/path.dart' as p;
 
 import '../../../core/file_kind.dart';
 import '../../../core/natural_sort.dart';
+import '../comic_resume.dart';
+import '../scrub_mode_controller.dart';
 import '../viewer_key_handler.dart';
 
 /// Page reader for `.cbz` (zip) and `.cbt` (tar) comics. `.cbr` (rar) and
@@ -18,6 +21,12 @@ import '../viewer_key_handler.dart';
 /// Those keys arrive through the app-global shortcuts via [ViewerKeyHandlers]
 /// (registered in [initState], cleared in [dispose]) so they work without this
 /// widget holding focus.
+///
+/// Remembers the last page viewed per comic (`comic_resume.dart`) and — like
+/// [MediaView] for video/audio — reacts to the global [scrubModeProvider]:
+/// while scrub mode is on, the current page is shown for
+/// [ComicScrubSettings.dwell] seconds, then jumps forward
+/// [ComicScrubSettings.pageSkip] pages, wrapping around at the end.
 class ComicView extends ConsumerStatefulWidget {
   const ComicView({required this.path, super.key});
 
@@ -46,17 +55,41 @@ List<(String name, Uint8List bytes)> decodeComicPages((Uint8List, bool) args) {
   return pages;
 }
 
+/// Next page index when scrub mode jumps forward by [skip] pages, wrapping
+/// around to the start once it runs past the end (mirrors the wrap-to-zero
+/// behaviour `MediaView._onPosition` uses at the end of a file).
+int nextScrubPageIndex({
+  required int current,
+  required int skip,
+  required int length,
+}) {
+  if (length <= 0) return 0;
+  return (current + skip) % length;
+}
+
 class _ComicViewState extends ConsumerState<ComicView> {
   static const _maxBytes = 400 << 20; // 400 MiB archive cap
+  static const _saveDelay = Duration(milliseconds: 500);
+
+  /// How long this comic has to stay selected before it's actually decoded.
+  /// [ComicView] is remounted fresh per file (keyed by path at the call site
+  /// in `viewer_panel.dart`), so unlike [MediaView]'s shared-key debounce,
+  /// this just delays the call to [_load] inside one mount — stepping past
+  /// several large `.cbz`/`.cbt` files quickly tears down each one (cancelling
+  /// its pending timer in [dispose]) before it ever starts decompressing.
+  static const _loadDelay = Duration(milliseconds: 150);
 
   List<_Page>? _pages;
   Object? _error;
   int _index = 0;
+  Timer? _loadDebounce;
+  Timer? _saveDebounce;
+  Timer? _scrubTimer;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadDebounce = Timer(_loadDelay, _load);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref
@@ -66,20 +99,16 @@ class _ComicViewState extends ConsumerState<ComicView> {
   }
 
   @override
-  void didUpdateWidget(ComicView old) {
-    super.didUpdateWidget(old);
-    if (old.path != widget.path) {
-      setState(() {
-        _pages = null;
-        _error = null;
-        _index = 0;
-      });
-      _load();
-    }
-  }
-
-  @override
   void dispose() {
+    _loadDebounce?.cancel();
+    _scrubTimer?.cancel();
+    _saveDebounce?.cancel();
+    final pages = _pages;
+    if (pages != null && _error == null) {
+      // Fire-and-forget: flush the current page immediately so a quick close
+      // doesn't lose position waiting on the debounce.
+      unawaited(rememberComicPage(ref, widget.path, pages[_index].name));
+    }
     ref.read(viewerKeyHandlersProvider.notifier).clear();
     super.dispose();
   }
@@ -106,7 +135,21 @@ class _ComicViewState extends ConsumerState<ComicView> {
         throw const _ComicError('No image pages found in this archive.');
       }
       if (!mounted) return;
-      setState(() => _pages = pages);
+
+      var initialIndex = 0;
+      final savedPage = await lastComicPage(ref, widget.path);
+      if (savedPage != null) {
+        final idx = pages.indexWhere((pg) => pg.name == savedPage);
+        if (idx != -1) initialIndex = idx;
+      }
+      if (!mounted) return;
+
+      setState(() {
+        _pages = pages;
+        _index = initialIndex;
+      });
+      // Honour scrub mode if it was already on when this comic opened.
+      if (mounted && ref.read(scrubModeProvider)) _setScrub(true);
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
@@ -117,18 +160,67 @@ class _ComicViewState extends ConsumerState<ComicView> {
   void _jump({required bool toEnd}) {
     final pages = _pages;
     if (pages == null) return;
-    setState(() => _index = toEnd ? pages.length - 1 : 0);
+    final next = toEnd ? pages.length - 1 : 0;
+    if (next != _index) {
+      setState(() => _index = next);
+      _scheduleSave();
+    }
   }
 
   void _go(int delta) {
     final pages = _pages;
     if (pages == null) return;
     final next = (_index + delta).clamp(0, pages.length - 1);
-    if (next != _index) setState(() => _index = next);
+    if (next != _index) {
+      setState(() => _index = next);
+      _scheduleSave();
+    }
+  }
+
+  /// Debounce (like `MediaView`'s `_openDebounce`) so rapid page-turning
+  /// doesn't hit the settings store on every keystroke — only the page the
+  /// user settles on gets persisted.
+  void _scheduleSave() {
+    final pages = _pages;
+    if (pages == null) return;
+    final name = pages[_index].name;
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(_saveDelay, () {
+      unawaited(rememberComicPage(ref, widget.path, name));
+    });
+  }
+
+  void _setScrub(bool on) {
+    _scrubTimer?.cancel();
+    _scrubTimer = null;
+    if (!on || _pages == null || _error != null) return;
+    final settings = ref.read(comicScrubSettingsControllerProvider);
+    _scrubTimer = Timer.periodic(settings.dwell, (_) => _advanceScrub());
+  }
+
+  void _advanceScrub() {
+    final pages = _pages;
+    if (pages == null || pages.isEmpty) return;
+    final settings = ref.read(comicScrubSettingsControllerProvider);
+    final next = nextScrubPageIndex(
+      current: _index,
+      skip: settings.pageSkip,
+      length: pages.length,
+    );
+    if (next != _index) {
+      setState(() => _index = next);
+      _scheduleSave();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(scrubModeProvider, (_, on) => _setScrub(on));
+    // Re-arm with the new dwell/skip if settings change while scrub is on.
+    ref.listen(comicScrubSettingsControllerProvider, (_, _) {
+      if (_scrubTimer != null) _setScrub(true);
+    });
+
     if (_error case final Object e) {
       return Center(
         child: Padding(
